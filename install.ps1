@@ -29,6 +29,21 @@ if (-not $isAdmin) {
 }
 
 $ErrorActionPreference = "Continue"
+
+# Global safety net: any unhandled terminating error (missing exe, failed cast,
+# .NET exception, etc.) lands here instead of silently closing the window.
+trap {
+    Write-Host ""
+    Write-Host "  x  Unexpected error: $_" -ForegroundColor Red
+    Write-Host "     Line $($_.InvocationInfo.ScriptLineNumber): $($_.InvocationInfo.Line.Trim())" -ForegroundColor DarkGray
+    Write-Host ""
+    Write-Host "  If you need help, open an issue at:" -ForegroundColor DarkGray
+    Write-Host "  https://github.com/PreFounded/verticalmedia/issues" -ForegroundColor DarkGray
+    Write-Host ""
+    Read-Host "  Press Enter to close"
+    break
+}
+
 $REPO       = "https://github.com/PreFounded/verticalmedia.git"
 $PY_VERSION = "3.12.7"
 $PY_URL     = "https://www.python.org/ftp/python/$PY_VERSION/python-$PY_VERSION-amd64.exe"
@@ -501,6 +516,16 @@ if (-not (Test-Path $venv)) {
 }
 
 Write-Info "Installing dependencies (this takes a moment)..."
+
+# pip.exe is sometimes missing from new venvs on fresh Python installs — bootstrap it
+if (-not (Test-Path $pipExe)) {
+    Write-Info "pip not found in venv — bootstrapping..."
+    & $pyExe -m ensurepip --upgrade
+    if (-not (Test-Path $pipExe)) {
+        Stop-Install "pip is missing from the virtual environment.`nRun manually: python -m ensurepip`nThen re-run this installer."
+    }
+}
+
 & $pipExe install -q --upgrade pip
 & $pipExe install -q -r (Join-Path $installDir "requirements.txt")
 if ($LASTEXITCODE -ne 0) { Stop-Install "pip install failed. See error above." }
@@ -625,9 +650,10 @@ if ($nssm) {
             nssm stop   $svcName 2>&1 | Out-Null
             nssm remove $svcName confirm 2>&1 | Out-Null
         }
-        nssm install $svcName $pyExe "-m" "uvicorn" "main:app" "--host" "0.0.0.0" "--port" $vmPort
-        nssm set $svcName AppDirectory $installDir
-        nssm set $svcName Start        SERVICE_AUTO_START
+        # Wrap paths in quotes so Windows SCM handles spaces in the install path correctly
+        nssm install $svcName "`"$pyExe`"" "-m" "uvicorn" "main:app" "--host" "0.0.0.0" "--port" $vmPort
+        nssm set $svcName AppDirectory  "`"$installDir`""
+        nssm set $svcName Start         SERVICE_AUTO_START
         # config.py calls load_dotenv() which reads .env from AppDirectory automatically
         nssm start $svcName
         Write-Ok "Service installed and started (auto-starts with Windows)"
