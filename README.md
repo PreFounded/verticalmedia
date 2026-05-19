@@ -43,8 +43,8 @@ curl -sSL https://raw.githubusercontent.com/PreFounded/verticalmedia/main/instal
 irm https://raw.githubusercontent.com/PreFounded/verticalmedia/main/install.ps1 | iex
 ```
 
-Requires [Python 3.10+](https://python.org/downloads/) and [Git](https://git-scm.com) to be installed first.  
-Optionally installs as a Windows service via [NSSM](https://nssm.cc) — or generates a `run.bat` if NSSM isn't present.
+Installs Python and Git automatically if missing (via winget or direct download).  
+Optionally registers as a Windows service (NSSM) or startup task — or writes `run.bat` if you prefer manual start.
 
 ### Option 3 — Docker
 ```bash
