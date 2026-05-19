@@ -12,6 +12,8 @@ Send directly to qBittorrent. No fuss.
 [![License](https://img.shields.io/badge/license-MIT-cyan.svg)](LICENSE)
 [![Docker](https://img.shields.io/badge/docker-ready-blue.svg)](docker-compose.yml)
 
+![verticalmedia screenshot](docs/screenshot.png)
+
 </div>
 
 ---
@@ -36,7 +38,15 @@ Send directly to qBittorrent. No fuss.
 curl -sSL https://raw.githubusercontent.com/PreFounded/verticalmedia/main/install.sh | bash
 ```
 
-### Option 2 — Docker
+### Option 2 — Windows (PowerShell)
+```powershell
+irm https://raw.githubusercontent.com/PreFounded/verticalmedia/main/install.ps1 | iex
+```
+
+Requires [Python 3.10+](https://python.org/downloads/) and [Git](https://git-scm.com) to be installed first.  
+Optionally installs as a Windows service via [NSSM](https://nssm.cc) — or generates a `run.bat` if NSSM isn't present.
+
+### Option 3 — Docker
 ```bash
 docker run -d \
   -p 7171:7171 \
@@ -46,7 +56,7 @@ docker run -d \
   ghcr.io/prefounded/verticalmedia:latest
 ```
 
-### Option 3 — Docker Compose
+### Option 4 — Docker Compose
 ```bash
 git clone https://github.com/PreFounded/verticalmedia
 cd verticalmedia
@@ -54,7 +64,7 @@ cd verticalmedia
 docker compose up -d
 ```
 
-### Option 4 — Manual
+### Option 5 — Manual
 ```bash
 git clone https://github.com/PreFounded/verticalmedia
 cd verticalmedia
@@ -168,7 +178,8 @@ verticalmedia/
 │   ├── index.html       # Full frontend (single file)
 │   └── themes/          # CSS themes
 ├── docs/
-├── install.sh           # Linux installer
+├── install.sh           # Linux/macOS installer
+├── install.ps1          # Windows installer
 ├── docker-compose.yml
 └── Dockerfile
 ```
