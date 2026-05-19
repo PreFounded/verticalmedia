@@ -3,20 +3,22 @@
 .SYNOPSIS
     verticalmedia Windows installer
 .DESCRIPTION
-    Interactive installer for verticalmedia on Windows.
-    Requires Python 3.10+ and Git.
+    Fully self-contained installer for verticalmedia on Windows.
+    Automatically installs Python and Git if missing.
 .EXAMPLE
     irm https://raw.githubusercontent.com/PreFounded/verticalmedia/main/install.ps1 | iex
 #>
 
 $ErrorActionPreference = "Stop"
-$REPO = "https://github.com/PreFounded/verticalmedia.git"
+$REPO        = "https://github.com/PreFounded/verticalmedia.git"
+$PY_VERSION  = "3.12.7"
+$PY_URL      = "https://www.python.org/ftp/python/$PY_VERSION/python-$PY_VERSION-amd64.exe"
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  Helpers
 # ─────────────────────────────────────────────────────────────────────────────
 
-function header {
+function Show-Header {
     Clear-Host
     Write-Host ""
     Write-Host "  ██╗   ██╗███╗   ███╗" -ForegroundColor Cyan
@@ -29,24 +31,24 @@ function header {
     Write-Host ""
 }
 
-function section([string]$title) {
+function Show-Section([string]$title) {
     Write-Host ""
     Write-Host "  ── $title " -ForegroundColor Cyan -NoNewline
     Write-Host ("─" * [Math]::Max(2, 44 - $title.Length)) -ForegroundColor DarkGray
 }
 
-function ok([string]$msg)   { Write-Host "  ✓  $msg" -ForegroundColor Green }
-function info([string]$msg) { Write-Host "     $msg" -ForegroundColor DarkGray }
-function warn([string]$msg) { Write-Host "  !  $msg" -ForegroundColor Yellow }
+function Write-Ok([string]$msg)   { Write-Host "  v  $msg" -ForegroundColor Green }
+function Write-Info([string]$msg) { Write-Host "     $msg" -ForegroundColor DarkGray }
+function Write-Warn([string]$msg) { Write-Host "  !  $msg" -ForegroundColor Yellow }
 
-function die([string]$msg) {
+function Stop-Install([string]$msg) {
     Write-Host ""
-    Write-Host "  ✗  $msg" -ForegroundColor Red
+    Write-Host "  x  $msg" -ForegroundColor Red
     Write-Host ""
     exit 1
 }
 
-function ask([string]$prompt, [string]$default = "") {
+function Read-Input([string]$prompt, [string]$default = "") {
     if ($default -ne "") {
         Write-Host "     $prompt" -ForegroundColor White -NoNewline
         Write-Host " [$default]" -ForegroundColor DarkGray -NoNewline
@@ -59,7 +61,7 @@ function ask([string]$prompt, [string]$default = "") {
     return $val.Trim()
 }
 
-function askYN([string]$prompt, [bool]$defaultYes = $true) {
+function Read-YN([string]$prompt, [bool]$defaultYes = $true) {
     $hint = if ($defaultYes) { "Y/n" } else { "y/N" }
     Write-Host "     $prompt " -ForegroundColor White -NoNewline
     Write-Host "[$hint]" -ForegroundColor DarkGray -NoNewline
@@ -69,128 +71,218 @@ function askYN([string]$prompt, [bool]$defaultYes = $true) {
     return $val -eq "y"
 }
 
+function Refresh-Path {
+    $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" +
+                [System.Environment]::GetEnvironmentVariable("Path", "User")
+}
+
+function Download-File([string]$url, [string]$dest) {
+    Write-Info "Downloading $(Split-Path $url -Leaf)..."
+    $wc = New-Object System.Net.WebClient
+    $wc.DownloadFile($url, $dest)
+}
+
 # ─────────────────────────────────────────────────────────────────────────────
-#  Step 1 — Check dependencies
+#  Dependency installers
 # ─────────────────────────────────────────────────────────────────────────────
 
-header
-section "Checking requirements"
+function Install-Python {
+    Show-Section "Installing Python $PY_VERSION"
+
+    $winget = Get-Command winget -ErrorAction SilentlyContinue
+    if ($winget) {
+        Write-Info "Using winget..."
+        winget install --id Python.Python.3.12 --source winget `
+            --accept-package-agreements --accept-source-agreements -e --silent
+        Refresh-Path
+    } else {
+        $installer = Join-Path $env:TEMP "python-installer.exe"
+        Download-File $PY_URL $installer
+        Write-Info "Running Python installer silently..."
+        $args = "/quiet InstallAllUsers=0 PrependPath=1 Include_launcher=0 Include_test=0"
+        Start-Process -FilePath $installer -ArgumentList $args -Wait
+        Remove-Item $installer -Force
+        Refresh-Path
+    }
+
+    # Verify
+    try {
+        $v = python --version 2>&1
+        Write-Ok "Python installed: $v"
+    } catch {
+        Stop-Install "Python installation failed. Install manually from https://python.org/downloads — tick 'Add to PATH'."
+    }
+}
+
+function Install-Git {
+    Show-Section "Installing Git"
+
+    $winget = Get-Command winget -ErrorAction SilentlyContinue
+    if ($winget) {
+        Write-Info "Using winget..."
+        winget install --id Git.Git --source winget `
+            --accept-package-agreements --accept-source-agreements -e --silent
+        Refresh-Path
+    } else {
+        Write-Info "Fetching latest Git for Windows release..."
+        try {
+            $release = Invoke-RestMethod "https://api.github.com/repos/git-for-windows/git/releases/latest"
+            $asset   = $release.assets | Where-Object { $_.name -match "64-bit\.exe$" } | Select-Object -First 1
+            $gitUrl  = $asset.browser_download_url
+        } catch {
+            Stop-Install "Could not fetch Git release info. Install manually from https://git-scm.com/download/win"
+        }
+        $installer = Join-Path $env:TEMP "git-installer.exe"
+        Download-File $gitUrl $installer
+        Write-Info "Running Git installer silently..."
+        $args = "/VERYSILENT /NORESTART /NOCANCEL /SP- /CLOSEAPPLICATIONS /COMPONENTS=`"icons,ext\reg\shellhere,assoc,assoc_sh`""
+        Start-Process -FilePath $installer -ArgumentList $args -Wait
+        Remove-Item $installer -Force
+        Refresh-Path
+    }
+
+    # Verify
+    try {
+        $v = git --version 2>&1
+        Write-Ok "Git installed: $v"
+    } catch {
+        Stop-Install "Git installation failed. Install manually from https://git-scm.com/download/win"
+    }
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  Step 1 — Requirements (auto-install if missing)
+# ─────────────────────────────────────────────────────────────────────────────
+
+Show-Header
+Show-Section "Requirements"
 
 # Python
+$pythonOk = $false
 try {
     $pyraw = python --version 2>&1
     if ($pyraw -match "Python (\d+)\.(\d+)") {
         $maj = [int]$Matches[1]; $min = [int]$Matches[2]
-        if ($maj -lt 3 -or ($maj -eq 3 -and $min -lt 10)) {
-            die "Python 3.10+ required (found $pyraw). Download: https://python.org/downloads"
+        if ($maj -gt 3 -or ($maj -eq 3 -and $min -ge 10)) {
+            Write-Ok $pyraw
+            $pythonOk = $true
+        } else {
+            Write-Warn "Found $pyraw but 3.10+ is required — will install a newer version."
         }
-        ok $pyraw
-    } else { die "Could not detect Python version. Install Python 3.10+ from https://python.org/downloads" }
-} catch { die "Python not found. Install Python 3.10+ from https://python.org/downloads — tick 'Add to PATH'" }
+    }
+} catch {
+    Write-Warn "Python not found — will install automatically."
+}
+if (-not $pythonOk) { Install-Python }
 
 # Git
+$gitOk = $false
 try {
     $gitraw = git --version 2>&1
-    ok $gitraw
-} catch { die "Git not found. Install from https://git-scm.com/download/win" }
+    Write-Ok $gitraw
+    $gitOk = $true
+} catch {
+    Write-Warn "Git not found — will install automatically."
+}
+if (-not $gitOk) { Install-Git }
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  Step 2 — Install location
 # ─────────────────────────────────────────────────────────────────────────────
 
-section "Install location"
+Show-Section "Install location"
 
 $defaultDir = Join-Path $env:USERPROFILE "verticalmedia"
-$installDir = ask "Where should verticalmedia be installed?" $defaultDir
+$installDir = Read-Input "Where should verticalmedia be installed?" $defaultDir
 
-if (Test-Path $installDir) {
-    warn "Folder already exists — will pull latest updates instead of a fresh clone."
+if (Test-Path (Join-Path $installDir ".git")) {
+    Write-Warn "Existing installation found — will update to latest."
+} elseif (Test-Path $installDir) {
+    Write-Warn "Folder exists but is not a git repo — files may be overwritten."
 } else {
     New-Item -ItemType Directory -Path $installDir -Force | Out-Null
 }
 
-info "Installing to: $installDir"
+Write-Info "Location: $installDir"
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  Step 3 — Clone / update
 # ─────────────────────────────────────────────────────────────────────────────
 
-section "Downloading files"
+Show-Section "Downloading verticalmedia"
 
 if (Test-Path (Join-Path $installDir ".git")) {
-    info "Updating existing installation..."
-    git -C $installDir pull --ff-only 2>&1 | ForEach-Object { info $_ }
+    Write-Info "Pulling latest changes..."
+    git -C $installDir pull --ff-only 2>&1 | ForEach-Object { Write-Info $_ }
 } else {
-    info "Cloning repository..."
-    git clone $REPO $installDir 2>&1 | ForEach-Object { info $_ }
+    Write-Info "Cloning repository..."
+    git clone $REPO $installDir 2>&1 | ForEach-Object { Write-Info $_ }
 }
-ok "Files ready"
+Write-Ok "Files ready"
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  Step 4 — Python environment
+#  Step 4 — Python virtual environment + deps
 # ─────────────────────────────────────────────────────────────────────────────
 
-section "Python environment"
+Show-Section "Python environment"
 
 $venv   = Join-Path $installDir ".venv"
-$python = Join-Path $venv "Scripts\python.exe"
-$pip    = Join-Path $venv "Scripts\pip.exe"
+$pyExe  = Join-Path $venv "Scripts\python.exe"
+$pipExe = Join-Path $venv "Scripts\pip.exe"
 
 if (-not (Test-Path $venv)) {
-    info "Creating virtual environment..."
+    Write-Info "Creating virtual environment..."
     python -m venv $venv
 }
 
-info "Installing dependencies..."
-& $pip install -q --upgrade pip
-& $pip install -q -r (Join-Path $installDir "requirements.txt")
-ok "Dependencies installed"
+Write-Info "Installing dependencies (this takes a moment)..."
+& $pipExe install -q --upgrade pip
+& $pipExe install -q -r (Join-Path $installDir "requirements.txt")
+Write-Ok "Dependencies installed"
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  Step 5 — Configuration
 # ─────────────────────────────────────────────────────────────────────────────
 
-$envFile    = Join-Path $installDir ".env"
-$configEnv  = $true
+$envFile   = Join-Path $installDir ".env"
+$doConfig  = $true
 
 if (Test-Path $envFile) {
-    section "Existing configuration found"
-    $configEnv = askYN "Reconfigure settings?" $false
+    Show-Section "Existing configuration found"
+    $doConfig = Read-YN "Reconfigure settings?" $false
 }
 
-if ($configEnv) {
-    section "qBittorrent"
-    info "verticalmedia sends torrents to qBittorrent. Make sure its Web UI is enabled."
-    info "(qBittorrent → Preferences → Web UI → Enable Web UI)"
+if ($doConfig) {
+    Show-Section "qBittorrent"
+    Write-Info "verticalmedia sends torrents directly to qBittorrent."
+    Write-Info "Enable its Web UI first: qBittorrent > Preferences > Web UI > Enable Web UI"
     Write-Host ""
-    $qbitUrl  = ask "qBittorrent Web UI URL"  "http://localhost:8081"
-    $qbitUser = ask "qBittorrent username"    "admin"
-    $qbitPass = ask "qBittorrent password"    "adminadmin"
+    $qbitUrl  = Read-Input "qBittorrent Web UI URL"  "http://localhost:8081"
+    $qbitUser = Read-Input "qBittorrent username"    "admin"
+    $qbitPass = Read-Input "qBittorrent password"    "adminadmin"
 
-    section "Prowlarr (optional)"
-    info "Prowlarr is an indexer manager that gives access to many more torrent sources."
-    info "Skip this if you don't use Prowlarr — you can add it later via the settings panel."
+    Show-Section "Prowlarr (optional)"
+    Write-Info "Prowlarr aggregates many torrent indexers into one API."
+    Write-Info "Skip this if you don't use it — it can be added later in Settings."
     Write-Host ""
-    $useProwlarr = askYN "Do you use Prowlarr?" $false
-    $prowlarrUrl = ""
-    $prowlarrKey = ""
+    $useProwlarr = Read-YN "Do you use Prowlarr?" $false
+    $prowlarrUrl = ""; $prowlarrKey = ""
     if ($useProwlarr) {
-        $prowlarrUrl = ask "Prowlarr URL"    "http://localhost:9696"
-        $prowlarrKey = ask "Prowlarr API key" ""
+        $prowlarrUrl = Read-Input "Prowlarr URL"     "http://localhost:9696"
+        $prowlarrKey = Read-Input "Prowlarr API key" ""
     }
 
-    section "Download paths"
-    info "Where should torrents be saved? Use full Windows paths (e.g. D:\Media\Anime)."
-    info "These must match the save paths configured in qBittorrent's category settings."
+    Show-Section "Download paths"
+    Write-Info "Full Windows paths for where torrents will be saved."
+    Write-Info "These must match the category save paths in qBittorrent."
     Write-Host ""
-    $pathAnime  = ask "Anime save path"    "C:\Downloads\Anime"
-    $pathMovies = ask "Movies save path"   "C:\Downloads\Movies"
-    $pathShows  = ask "TV shows save path" "C:\Downloads\Shows"
+    $pathAnime  = Read-Input "Anime save path"    "C:\Downloads\Anime"
+    $pathMovies = Read-Input "Movies save path"   "C:\Downloads\Movies"
+    $pathShows  = Read-Input "TV shows save path" "C:\Downloads\Shows"
 
-    section "Server"
-    $vmPort = ask "Port to run on" "7171"
+    Show-Section "Server settings"
+    $vmPort = Read-Input "Port to listen on" "7171"
 
-    # Write .env
     @"
 # qBittorrent
 QBIT_URL=$qbitUrl
@@ -207,18 +299,18 @@ PATH_MOVIES=$pathMovies
 PATH_SHOWS=$pathShows
 
 # Server
-VM_PORT=$vmPort
 VM_HOST=0.0.0.0
+VM_PORT=$vmPort
 "@ | Set-Content $envFile -Encoding UTF8
-    ok ".env saved to $envFile"
+    Write-Ok ".env written to $envFile"
+
 } else {
-    info "Keeping existing configuration."
-    # Read port from existing .env for the done message
+    Write-Info "Keeping existing configuration."
     $vmPort = "7171"
-    if (Test-Path $envFile) {
-        $portLine = Get-Content $envFile | Where-Object { $_ -match "^VM_PORT=" }
-        if ($portLine) { $vmPort = $portLine -replace "^VM_PORT=", "" }
-    }
+    $portLine = Get-Content $envFile -ErrorAction SilentlyContinue |
+                Where-Object { $_ -match "^VM_PORT=" } |
+                Select-Object -First 1
+    if ($portLine) { $vmPort = $portLine -replace "^VM_PORT=\s*", "" }
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -231,52 +323,53 @@ $runBat = Join-Path $installDir "run.bat"
 title verticalmedia
 cd /d "%~dp0"
 call .venv\Scripts\activate.bat
-python -m uvicorn main:app --host 0.0.0.0 --port %VM_PORT%
+python -m uvicorn main:app --host 0.0.0.0 --port $vmPort
 pause
 "@ | Set-Content $runBat -Encoding ASCII
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  Step 7 — Background service (optional)
+#  Step 7 — Run on startup (optional)
 # ─────────────────────────────────────────────────────────────────────────────
 
-section "Run on startup (optional)"
-info "Without a service, use run.bat to start verticalmedia manually."
+Show-Section "Run on startup (optional)"
+Write-Info "Without a service, double-click run.bat to start verticalmedia."
 Write-Host ""
 
-$nssm = Get-Command nssm -ErrorAction SilentlyContinue
+$nssm     = Get-Command nssm -ErrorAction SilentlyContinue
 $schtasks = Get-Command schtasks -ErrorAction SilentlyContinue
 
 if ($nssm) {
-    $installService = askYN "Install as a Windows service (auto-start, runs in background)?" $true
-    if ($installService) {
+    if (Read-YN "Install as a Windows service via NSSM? (runs in background, auto-starts with Windows)" $true) {
         $svcName = "verticalmedia"
-        # Remove existing service if present
         $existing = nssm status $svcName 2>&1
-        if ($existing -notmatch "No such service") {
-            info "Removing existing service..."
+        if ($LASTEXITCODE -eq 0 -and $existing -notmatch "No such service") {
+            Write-Info "Removing previous service..."
             nssm stop $svcName 2>&1 | Out-Null
             nssm remove $svcName confirm 2>&1 | Out-Null
         }
-        nssm install $svcName $python "-m" "uvicorn" "main:app" "--host" "0.0.0.0" "--port" $vmPort
+        nssm install $svcName $pyExe "-m" "uvicorn" "main:app" "--host" "0.0.0.0" "--port" $vmPort
         nssm set $svcName AppDirectory $installDir
         nssm set $svcName AppEnvironmentExtra "@$envFile"
         nssm set $svcName Start SERVICE_AUTO_START
         nssm start $svcName
-        ok "Service installed and started (auto-starts with Windows)"
-        info "Manage: nssm start|stop|restart verticalmedia"
+        Write-Ok "Service installed and started (auto-starts with Windows)"
+        Write-Info "Manage: nssm start|stop|restart verticalmedia"
     } else {
-        ok "Skipped. Use run.bat to start manually."
+        Write-Ok "Skipped — use run.bat to start manually."
     }
 } elseif ($schtasks) {
-    $useScheduler = askYN "Register as a startup task (runs at login, no NSSM needed)?" $true
-    if ($useScheduler) {
+    if (Read-YN "Register as a login startup task via Task Scheduler?" $true) {
         $taskXml = @"
 <?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <Triggers><LogonTrigger><Enabled>true</Enabled></LogonTrigger></Triggers>
-  <Settings><ExecutionTimeLimit>PT0S</ExecutionTimeLimit><MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy></Settings>
+  <Settings>
+    <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <Hidden>true</Hidden>
+  </Settings>
   <Actions><Exec>
-    <Command>$python</Command>
+    <Command>$pyExe</Command>
     <Arguments>-m uvicorn main:app --host 0.0.0.0 --port $vmPort</Arguments>
     <WorkingDirectory>$installDir</WorkingDirectory>
   </Exec></Actions>
@@ -286,15 +379,15 @@ if ($nssm) {
         [System.IO.File]::WriteAllText($xmlPath, $taskXml, [System.Text.Encoding]::Unicode)
         schtasks /Create /TN "verticalmedia" /XML $xmlPath /F | Out-Null
         Remove-Item $xmlPath -Force
-        ok "Startup task registered (runs at login)"
-        info "Manage: Task Scheduler → verticalmedia"
+        Write-Ok "Startup task registered — verticalmedia launches at login"
+        Write-Info "Manage: Task Scheduler > verticalmedia"
     } else {
-        ok "Skipped. Use run.bat to start manually."
+        Write-Ok "Skipped — use run.bat to start manually."
     }
 } else {
-    warn "Neither NSSM nor Task Scheduler found — using run.bat only."
-    info "For auto-start: install NSSM from https://nssm.cc and re-run this installer."
-    ok "run.bat created — double-click to start verticalmedia"
+    Write-Warn "Service setup skipped (NSSM not found)."
+    Write-Info "To auto-start on boot: install NSSM from https://nssm.cc and re-run this script."
+    Write-Ok "run.bat written — double-click it to start verticalmedia"
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -305,12 +398,12 @@ Write-Host ""
 Write-Host "  ──────────────────────────────────────────────" -ForegroundColor Cyan
 Write-Host "   verticalmedia is ready!" -ForegroundColor Green
 Write-Host ""
-Write-Host "   Open: " -NoNewline -ForegroundColor DarkGray
+Write-Host "   Open  > " -NoNewline -ForegroundColor DarkGray
 Write-Host "http://localhost:$vmPort" -ForegroundColor Cyan
-Write-Host "   Docs: " -NoNewline -ForegroundColor DarkGray
+Write-Host "   API   > " -NoNewline -ForegroundColor DarkGray
 Write-Host "http://localhost:$vmPort/docs" -ForegroundColor DarkGray
 Write-Host ""
-Write-Host "   Config: $envFile" -ForegroundColor DarkGray
-Write-Host "   Run:    $runBat" -ForegroundColor DarkGray
+Write-Host "   Config : $envFile" -ForegroundColor DarkGray
+Write-Host "   Run    : $runBat" -ForegroundColor DarkGray
 Write-Host "  ──────────────────────────────────────────────" -ForegroundColor Cyan
 Write-Host ""
