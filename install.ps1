@@ -9,7 +9,7 @@
     irm https://raw.githubusercontent.com/PreFounded/verticalmedia/main/install.ps1 | iex
 #>
 
-$ErrorActionPreference = "Stop"
+$ErrorActionPreference = "Continue"
 $REPO        = "https://github.com/PreFounded/verticalmedia.git"
 $PY_VERSION  = "3.12.7"
 $PY_URL      = "https://www.python.org/ftp/python/$PY_VERSION/python-$PY_VERSION-amd64.exe"
@@ -199,9 +199,9 @@ if (Test-Path (Join-Path $installDir ".git")) {
     Write-Warn "Existing installation found — will update to latest."
 } elseif (Test-Path $installDir) {
     Write-Warn "Folder exists but is not a git repo — files may be overwritten."
-} else {
-    New-Item -ItemType Directory -Path $installDir -Force | Out-Null
 }
+# Do NOT pre-create the directory — git clone creates it itself.
+# Creating it first causes git to refuse cloning into an existing path.
 
 Write-Info "Location: $installDir"
 
@@ -213,10 +213,12 @@ Show-Section "Downloading verticalmedia"
 
 if (Test-Path (Join-Path $installDir ".git")) {
     Write-Info "Pulling latest changes..."
-    git -C $installDir pull --ff-only 2>&1 | ForEach-Object { Write-Info $_ }
+    git -C $installDir pull --ff-only
+    if ($LASTEXITCODE -ne 0) { Stop-Install "git pull failed. Check your network connection and try again." }
 } else {
     Write-Info "Cloning repository..."
-    git clone $REPO $installDir 2>&1 | ForEach-Object { Write-Info $_ }
+    git clone $REPO $installDir
+    if ($LASTEXITCODE -ne 0) { Stop-Install "git clone failed. Check your network connection and try again." }
 }
 Write-Ok "Files ready"
 
@@ -233,11 +235,13 @@ $pipExe = Join-Path $venv "Scripts\pip.exe"
 if (-not (Test-Path $venv)) {
     Write-Info "Creating virtual environment..."
     python -m venv $venv
+    if ($LASTEXITCODE -ne 0) { Stop-Install "Failed to create virtual environment." }
 }
 
 Write-Info "Installing dependencies (this takes a moment)..."
 & $pipExe install -q --upgrade pip
 & $pipExe install -q -r (Join-Path $installDir "requirements.txt")
+if ($LASTEXITCODE -ne 0) { Stop-Install "pip install failed. Check the error above." }
 Write-Ok "Dependencies installed"
 
 # ─────────────────────────────────────────────────────────────────────────────
