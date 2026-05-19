@@ -1,0 +1,1119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>verticalmedia</title>
+<link id="theme-css" rel="stylesheet" href="/static/themes/dark.css">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,-apple-system,sans-serif;min-height:100vh}
+::-webkit-scrollbar{width:6px}
+::-webkit-scrollbar-track{background:var(--bg-base)}
+::-webkit-scrollbar-thumb{background:var(--accent-border);border-radius:3px}
+::selection{background:var(--accent);color:var(--bg)}
+a{color:var(--accent);text-decoration:none}
+input,select,button{font-family:inherit;outline:none}
+
+/* ── Header ── */
+.header{padding:12px 24px;background:var(--bg-base);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
+.header-left{display:flex;align-items:center;gap:24px}
+.logo{font-size:18px;font-weight:700;letter-spacing:1px}
+.logo span{color:var(--accent)}
+.tabs{display:flex;gap:4px}
+.tab{padding:6px 14px;border-radius:6px;font-size:13px;cursor:pointer;color:var(--text-muted);transition:all .2s;border:none;background:transparent}
+.tab:hover{color:var(--text);background:var(--bg-elevated)}
+.tab.active{color:var(--accent);background:var(--accent-dim)}
+.header-right{display:flex;align-items:center;gap:12px}
+.status-row{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-muted)}
+.status-dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+.status-dot.connected{background:var(--positive);box-shadow:0 0 6px var(--positive)}
+.status-dot.error{background:var(--negative);box-shadow:0 0 6px var(--negative)}
+.status-dot.connecting{background:var(--warning);animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.settings-btn{background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:18px;padding:4px 8px;border-radius:6px;transition:all .2s}
+.settings-btn:hover{color:var(--text);background:var(--bg-elevated)}
+
+/* ── Search ── */
+.search-section{padding:16px 24px;background:var(--bg-base);border-bottom:1px solid var(--border)}
+.search-row{display:flex;gap:10px;flex-wrap:wrap}
+.search-input{flex:1;min-width:200px;padding:10px 14px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px;transition:border .2s}
+.search-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-dim)}
+.search-btn{padding:10px 20px;background:var(--accent);color:var(--bg);border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;transition:opacity .2s}
+.search-btn:hover{opacity:.85}
+.search-btn:disabled{opacity:.4;cursor:not-allowed}
+.filter-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.filter-chip{padding:6px 14px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:20px;font-size:12px;color:var(--text-muted);cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:6px}
+.filter-chip:hover{border-color:var(--accent-border)}
+.filter-chip.active{background:var(--accent-dim);border-color:var(--accent);color:var(--accent)}
+.filter-chip select{background:transparent;border:none;color:var(--text);font-size:12px;cursor:pointer}
+.filter-chip select option{background:var(--bg-elevated)}
+.batch-toggle{padding:6px 14px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:20px;font-size:12px;color:var(--text-muted);cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:6px}
+.batch-toggle:hover{border-color:var(--accent-border)}
+.batch-toggle.active{background:var(--accent-dim);border-color:var(--accent);color:var(--accent)}
+
+/* ── Skeleton loading ── */
+@keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
+.skeleton{background:linear-gradient(90deg,var(--bg-elevated) 25%,var(--bg-hover) 50%,var(--bg-elevated) 75%);background-size:200% 100%;animation:shimmer 1.5s infinite;border-radius:6px}
+.skeleton-card{background:var(--bg-base);border:1px solid var(--border);border-radius:10px;padding:14px 16px;display:flex;gap:12px}
+.skeleton-poster{width:40px;height:60px;flex-shrink:0}
+.skeleton-body{flex:1;display:flex;flex-direction:column;gap:8px}
+.skeleton-line{height:14px}
+
+/* ── Results ── */
+.results-section{padding:16px 24px}
+.results-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.results-count{font-size:13px;color:var(--text-muted)}
+.results-grid{display:flex;flex-direction:column;gap:8px}
+.result-card{background:var(--bg-base);border:1px solid var(--border);border-radius:10px;padding:14px 16px;transition:all .2s}
+.result-card:hover{border-color:var(--accent-border);background:var(--bg-elevated)}
+.result-top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:6px}
+.result-name{font-size:14px;line-height:1.4;flex:1;word-break:break-word;display:flex;align-items:center}
+.result-name .src-badge{display:inline-block;font-size:11px;margin-right:6px}
+.result-meta{display:flex;flex-wrap:wrap;gap:8px 16px;font-size:12px;color:var(--text-muted);margin-bottom:8px}
+.result-meta span{display:flex;align-items:center;gap:4px}
+.seeders{color:var(--positive);font-weight:600}
+.seeders.low{color:var(--warning)}
+.seeders.zero{color:var(--negative)}
+.quality-badge{display:inline-block;padding:1px 8px;border-radius:4px;font-size:11px;font-weight:600;font-family:monospace;white-space:nowrap}
+.quality-badge.q4k{background:rgba(139,92,246,.15);color:var(--purple);border:1px solid rgba(139,92,246,.3)}
+.quality-badge.q1080{background:var(--accent-dim);color:var(--accent);border:1px solid var(--accent-border)}
+.quality-badge.q720{background:rgba(16,185,129,.15);color:var(--positive);border:1px solid rgba(16,185,129,.3)}
+.quality-badge.qsd{background:rgba(245,158,11,.15);color:var(--warning);border:1px solid rgba(245,158,11,.3)}
+.trusted-badge,.inlib-badge{display:inline-block;padding:1px 6px;border-radius:3px;font-size:10px;border:1px solid rgba(16,185,129,.3);white-space:nowrap}
+.trusted-badge{background:rgba(16,185,129,.15);color:var(--positive)}
+.inlib-badge{background:var(--accent-dim);color:var(--accent);border-color:var(--accent-border)}
+.batch-badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;background:var(--accent-dim);color:var(--accent);border:1px solid var(--accent-border);white-space:nowrap}
+.result-actions{display:flex;gap:6px;flex-wrap:wrap}
+.dl-btn{padding:5px 12px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid var(--accent);background:transparent;color:var(--accent);transition:all .2s;display:flex;align-items:center;gap:4px}
+.dl-btn:hover{background:var(--accent-dim)}
+.dl-btn:disabled{opacity:.4;cursor:not-allowed}
+.dl-btn.ok{background:rgba(16,185,129,.15);border-color:var(--positive);color:var(--positive)}
+.dl-btn.fail{background:rgba(239,68,68,.15);border-color:var(--negative);color:var(--negative)}
+.copy-btn{padding:5px 10px;border-radius:6px;font-size:11px;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--text-muted);transition:all .2s}
+.copy-btn:hover{border-color:var(--accent-border);color:var(--text)}
+.dl-popup{position:relative}
+.dl-dropdown{position:absolute;top:100%;left:0;margin-top:4px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:8px;padding:4px;z-index:10;min-width:120px;box-shadow:0 8px 24px rgba(0,0,0,.4)}
+.dl-dropdown button{display:block;width:100%;padding:8px 12px;background:transparent;border:none;color:var(--text);font-size:12px;cursor:pointer;border-radius:4px;text-align:left}
+.dl-dropdown button:hover{background:var(--bg-hover);color:var(--accent)}
+
+/* ── Downloads strip ── */
+.downloads-section{padding:8px 24px 16px;border-top:1px solid var(--border)}
+.downloads-header{font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:1px}
+.dl-item{background:var(--bg-base);border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:6px}
+.dl-name{font-size:13px;margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dl-progress{height:4px;background:var(--bg-elevated);border-radius:2px;overflow:hidden;margin-bottom:6px}
+.dl-progress-fill{height:100%;background:var(--accent);border-radius:2px;transition:width .3s;min-width:2px}
+.dl-progress-fill.seeding{background:var(--positive)}
+.dl-meta{display:flex;gap:10px;font-size:11px;color:var(--text-muted);align-items:center}
+.dl-badge{font-size:10px;padding:1px 6px;border-radius:3px;font-family:monospace}
+.dl-badge.dl{background:var(--accent-dim);color:var(--accent)}
+.dl-badge.seed{background:rgba(16,185,129,.15);color:var(--positive)}
+.dl-badge.paused{background:rgba(245,158,11,.15);color:var(--warning)}
+.dl-badge.error{background:rgba(239,68,68,.15);color:var(--negative)}
+.dl-action-btn{background:transparent;border:1px solid var(--border);border-radius:4px;padding:2px 8px;font-size:10px;cursor:pointer;color:var(--text-muted);transition:all .2s}
+.dl-action-btn:hover{border-color:var(--accent-border);color:var(--text)}
+.dl-action-btn.danger:hover{border-color:var(--negative);color:var(--negative)}
+.empty-state{text-align:center;padding:40px 20px;color:var(--text-muted);font-size:14px}
+
+/* ── Library ── */
+.library-section{display:none;padding:16px 24px}
+.library-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:10px}
+.library-filters{display:flex;gap:6px;flex-wrap:wrap}
+.lib-filter{padding:4px 12px;border-radius:16px;font-size:11px;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--text-muted);transition:all .2s}
+.lib-filter:hover{border-color:var(--accent-border)}
+.lib-filter.active{background:var(--accent-dim);border-color:var(--accent);color:var(--accent)}
+.lib-filter select{background:transparent;border:none;color:var(--text);font-size:11px;cursor:pointer;padding:0}
+.lib-filter select option{background:var(--bg-elevated)}
+.storage-bar{display:flex;align-items:center;gap:8px;font-size:10px;color:var(--text-muted);font-family:monospace}
+.storage-track{width:80px;height:6px;background:var(--bg-elevated);border-radius:3px;overflow:hidden}
+.storage-fill{height:100%;background:var(--accent);border-radius:3px;transition:width .5s}
+.torrent-row{background:var(--bg-base);border:1px solid var(--border);border-radius:8px;padding:10px 14px;transition:all .2s;margin-bottom:6px}
+.torrent-row:hover{border-color:var(--accent-border)}
+.torrent-row1{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:4px}
+.torrent-name{font-size:13px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.torrent-cat{font-size:10px;padding:1px 6px;border-radius:3px;background:var(--bg-elevated);color:var(--text-muted);white-space:nowrap}
+.torrent-row2{display:flex;gap:12px;font-size:11px;color:var(--text-muted);margin-bottom:4px;flex-wrap:wrap}
+.torrent-progress-bar{height:3px;background:var(--bg-elevated);border-radius:2px;overflow:hidden;margin-bottom:6px}
+.torrent-progress-fill{height:100%;border-radius:2px;transition:width .5s}
+.torrent-progress-fill.dl{background:var(--accent)}
+.torrent-progress-fill.seed{background:var(--positive)}
+.torrent-progress-fill.paused{background:var(--warning)}
+.torrent-progress-fill.error{background:var(--negative)}
+.torrent-row3{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.state-badge{font-size:10px;padding:1px 6px;border-radius:3px;font-family:monospace}
+.state-badge.dl{background:var(--accent-dim);color:var(--accent)}
+.state-badge.seed{background:rgba(16,185,129,.12);color:var(--positive)}
+.state-badge.done{background:rgba(16,185,129,.08);color:var(--positive)}
+.state-badge.paused{background:rgba(245,158,11,.12);color:var(--warning)}
+.state-badge.stalled{background:rgba(245,158,11,.08);color:var(--warning)}
+.state-badge.error{background:rgba(239,68,68,.12);color:var(--negative)}
+.lib-action-btn{padding:2px 10px;border-radius:4px;font-size:10px;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--text-muted);transition:all .2s}
+.lib-action-btn:hover{border-color:var(--accent-border);color:var(--text)}
+.lib-action-btn.danger{border-color:transparent;color:var(--negative)}
+.lib-action-btn.danger:hover{border-color:var(--negative)}
+.confirm-box{display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border-radius:4px;font-size:10px}
+.confirm-box.danger{border:1px solid var(--negative);background:rgba(239,68,68,.08)}
+.confirm-box.normal{border:1px solid var(--border)}
+.confirm-yes{padding:2px 8px;border-radius:3px;border:none;cursor:pointer;font-size:10px;font-weight:600}
+.confirm-yes.normal{background:var(--accent);color:var(--bg)}
+.confirm-yes.danger{background:var(--negative);color:white}
+.confirm-no{padding:2px 6px;border:none;background:transparent;cursor:pointer;font-size:10px;color:var(--text-muted)}
+
+/* ── Toast ── */
+.toast-container{position:fixed;top:16px;right:16px;z-index:999;display:flex;flex-direction:column;gap:8px}
+.toast{padding:10px 16px;border-radius:8px;font-size:13px;font-family:monospace;animation:slideIn .2s ease;max-width:360px}
+.toast.success{background:rgba(16,185,129,.15);border:1px solid rgba(16,185,129,.4);color:var(--positive)}
+.toast.error{background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.4);color:var(--negative)}
+.toast.info{background:var(--accent-dim);border:1px solid var(--accent-border);color:var(--accent)}
+@keyframes slideIn{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
+
+/* ── Settings panel ── */
+.settings-panel{position:fixed;right:-420px;top:0;bottom:0;width:400px;background:var(--bg-base);border-left:1px solid var(--accent-border);padding:24px;z-index:200;transition:right 300ms ease;overflow-y:auto}
+.settings-panel.open{right:0}
+.settings-section{margin-bottom:20px}
+.settings-label{font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+.settings-input{width:100%;padding:8px 12px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;transition:border .2s}
+.settings-input:focus{border-color:var(--accent)}
+.settings-status{font-size:11px;margin-top:4px;min-height:16px}
+.test-btn{padding:8px 14px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:6px;color:var(--text-muted);font-size:12px;cursor:pointer;white-space:nowrap;transition:all .2s}
+.test-btn:hover{border-color:var(--accent-border);color:var(--text)}
+.theme-pills{display:flex;flex-wrap:wrap;gap:6px}
+.theme-pill{padding:4px 12px;border-radius:16px;font-size:12px;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--text-muted);transition:all .2s}
+.theme-pill:hover{border-color:var(--accent-border);color:var(--text)}
+.theme-pill.active{background:var(--accent-dim);border-color:var(--accent);color:var(--accent)}
+.save-settings-btn{width:100%;padding:12px;background:var(--accent);color:var(--bg);border:none;border-radius:8px;font-weight:700;cursor:pointer;margin-top:16px;font-size:14px;transition:opacity .2s}
+.save-settings-btn:hover{opacity:.85}
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:199}
+.overlay.open{display:block}
+
+/* ── Responsive ── */
+@media(max-width:640px){
+  .header{padding:10px 16px}
+  .search-section,.results-section,.downloads-section,.library-section{padding:12px 16px}
+  .result-meta{gap:6px 10px}
+  .storage-bar{display:none}
+  .settings-panel{width:100%;right:-100%}
+}
+</style>
+</head>
+<body>
+
+<div class="overlay" id="overlay" onclick="closeSettings()"></div>
+
+<div class="header">
+  <div class="header-left">
+    <div class="logo">vertical<span>media</span></div>
+    <div class="tabs">
+      <button class="tab active" data-tab="search">🔍 Search</button>
+      <button class="tab" data-tab="library">📚 Library</button>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="status-row" id="statusRow">
+      <span class="status-dot connecting" id="statusDot"></span>
+      <span id="statusText">Connecting...</span>
+      <span id="indexerCount" style="display:none;color:var(--text-muted)"></span>
+    </div>
+    <button class="settings-btn" onclick="openSettings()" title="Settings (⚙)">⚙</button>
+  </div>
+</div>
+
+<!-- ─── SEARCH TAB ─── -->
+<div id="tabSearch">
+  <div class="search-section">
+    <div class="search-row">
+      <input class="search-input" id="searchInput" type="text" placeholder="Search movies, anime, shows... (Ctrl+K)" autofocus>
+      <button class="search-btn" id="searchBtn">Search</button>
+    </div>
+    <div class="filter-row">
+      <span class="filter-chip active" data-filter="category" data-value="all">All</span>
+      <span class="filter-chip" data-filter="category" data-value="anime">🌸 Anime</span>
+      <span class="filter-chip" data-filter="category" data-value="movies">🎬 Movies</span>
+      <span class="filter-chip" data-filter="category" data-value="shows">📺 Shows</span>
+      <span class="batch-toggle" id="batchToggle" title="Search for complete season packs">📦 Batch</span>
+      <span class="batch-toggle" id="batchDlBtn" title="Download entire season range" onclick="App.openBatchModal()">⬇ Download</span>
+      <span class="filter-chip">
+        <select id="sourceSelect" multiple size="1">
+          <option value="prowlarr" selected>📡 Prowlarr</option>
+          <option value="solidtorrents" selected>💎 SolidTorrents</option>
+          <option value="nyaa" selected>🌸 Nyaa</option>
+          <option value="animetosho" selected>🗃️ AnimeTosho</option>
+          <option value="yts">🎬 YTS</option>
+          <option value="piratebay" selected>☠️ PirateBay</option>
+          <option value="knaben" selected>🔍 Knaben</option>
+          <option value="eztv">📺 EZTV</option>
+        </select>
+      </span>
+      <span class="filter-chip">
+        <select id="sortSelect">
+          <option value="seeders">Sort: Seeders</option>
+          <option value="size">Sort: Size</option>
+        </select>
+      </span>
+      <span class="filter-chip">
+        <select id="qualitySelect">
+          <option value="all">Quality: All</option>
+          <option value="4K">4K</option>
+          <option value="1080p">1080p</option>
+          <option value="720p">720p</option>
+          <option value="BluRay">BluRay</option>
+          <option value="HDR">HDR</option>
+        </select>
+      </span>
+    </div>
+  </div>
+
+  <div class="results-section" id="resultsSection">
+    <div class="results-header">
+      <span class="results-count" id="resultsCount"></span>
+    </div>
+    <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px" id="sourceBreakdown"></div>
+    <div class="results-grid" id="resultsGrid"></div>
+  </div>
+
+  <div class="downloads-section" id="downloadsSection">
+    <div class="downloads-header" id="downloadsHeader">Downloads</div>
+    <div id="downloadsList"></div>
+  </div>
+</div>
+
+<!-- ─── LIBRARY TAB ─── -->
+<div class="library-section" id="tabLibrary">
+  <div class="library-header">
+    <div class="library-filters">
+      <span class="lib-filter active" data-libfilter="all">All</span>
+      <span class="lib-filter" data-libfilter="downloading">Downloading</span>
+      <span class="lib-filter" data-libfilter="completed">Completed</span>
+      <span class="lib-filter" data-libfilter="seeding">Seeding</span>
+      <span class="lib-filter" data-libfilter="paused">Paused</span>
+      <span class="lib-filter" data-libfilter="error">Error</span>
+      <span class="lib-filter">
+        <select id="libSort">
+          <option value="added_on">Sort: Added</option>
+          <option value="name">Sort: Name</option>
+          <option value="size">Sort: Size</option>
+          <option value="progress">Sort: Progress</option>
+        </select>
+      </span>
+      <span class="lib-filter">
+        <select id="libCategory">
+          <option value="">Category: All</option>
+          <option value="anime">🌸 Anime</option>
+          <option value="movies">🎬 Movies</option>
+          <option value="shows">📺 Shows</option>
+        </select>
+      </span>
+    </div>
+    <div class="storage-bar" id="storageBar">
+      <span id="storageText">--</span>
+      <div class="storage-track"><div class="storage-fill" id="storageFill" style="width:0%"></div></div>
+    </div>
+  </div>
+  <div id="torrentContainer"></div>
+</div>
+
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- ─── BATCH DOWNLOAD MODAL ─── -->
+<div id="batch-modal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);z-index:998;justify-content:center;align-items:center">
+  <div style="background:var(--bg-elevated);border:1px solid var(--accent-border);border-radius:12px;padding:24px;width:420px;max-width:90vw;box-shadow:0 16px 48px rgba(0,0,0,.6)">
+    <h3 style="color:var(--accent);margin-bottom:16px;font-size:16px">📦 Batch Episode Download</h3>
+    <div style="display:flex;flex-direction:column;gap:10px;font-size:13px">
+      <div>
+        <label style="color:var(--text-muted);font-size:11px;display:block;margin-bottom:4px">Anime / Show Name</label>
+        <input id="batch-name" type="text" placeholder="One Piece" style="width:100%;padding:8px 12px;background:var(--bg-base);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:14px">
+      </div>
+      <div style="display:flex;gap:10px">
+        <div style="flex:1">
+          <label style="color:var(--text-muted);font-size:11px;display:block;margin-bottom:4px">From Episode</label>
+          <input id="batch-start" type="number" value="1" min="1" style="width:100%;padding:8px 12px;background:var(--bg-base);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:14px">
+        </div>
+        <div style="flex:1">
+          <label style="color:var(--text-muted);font-size:11px;display:block;margin-bottom:4px">To Episode</label>
+          <input id="batch-end" type="number" value="24" min="1" style="width:100%;padding:8px 12px;background:var(--bg-base);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:14px">
+        </div>
+      </div>
+      <div style="display:flex;gap:10px">
+        <div style="flex:1">
+          <label style="color:var(--text-muted);font-size:11px;display:block;margin-bottom:4px">Quality</label>
+          <select id="batch-quality" style="width:100%;padding:8px 12px;background:var(--bg-base);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px">
+            <option value="1080p">1080p</option>
+            <option value="720p">720p</option>
+            <option value="480p">480p</option>
+          </select>
+        </div>
+        <div style="flex:1">
+          <label style="color:var(--text-muted);font-size:11px;display:block;margin-bottom:4px">Source</label>
+          <select id="batch-source" style="width:100%;padding:8px 12px;background:var(--bg-base);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px">
+            <option value="nyaa">Nyaa (Anime)</option>
+            <option value="tokyoinsider">TokyoInsider</option>
+          </select>
+        </div>
+      </div>
+      <div>
+        <label style="color:var(--text-muted);font-size:11px;display:block;margin-bottom:4px">Category</label>
+        <select id="batch-category" style="width:100%;padding:8px 12px;background:var(--bg-base);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px">
+          <option value="anime">🌸 Anime</option>
+          <option value="shows">📺 Shows</option>
+          <option value="movies">🎬 Movies</option>
+        </select>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:12px">
+        <button id="batch-submit-btn" onclick="App.startBatchDownload()" style="flex:1;padding:10px;background:var(--accent);color:var(--bg);border:none;border-radius:6px;font-size:14px;font-weight:600;cursor:pointer">⬇ Download Episodes</button>
+        <button onclick="App.closeBatchModal()" style="padding:10px 16px;background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--text-muted);cursor:pointer;font-size:13px">Cancel</button>
+      </div>
+      <div id="batch-result" style="margin-top:8px;font-size:12px;font-family:monospace;color:var(--text-muted);min-height:20px"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── SETTINGS PANEL ─── -->
+<div class="settings-panel" id="settings-panel">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px">
+    <h2 style="color:var(--accent);font-size:16px">⚙ Settings</h2>
+    <button onclick="closeSettings()" style="background:none;border:none;color:var(--text-muted);font-size:20px;cursor:pointer;line-height:1">✕</button>
+  </div>
+
+  <div class="settings-section">
+    <div class="settings-label">Theme</div>
+    <div class="theme-pills">
+      <button class="theme-pill" onclick="setTheme('dark')" data-theme="dark">Dark</button>
+      <button class="theme-pill" onclick="setTheme('catppuccin')" data-theme="catppuccin">Catppuccin</button>
+      <button class="theme-pill" onclick="setTheme('dracula')" data-theme="dracula">Dracula</button>
+      <button class="theme-pill" onclick="setTheme('nord')" data-theme="nord">Nord</button>
+      <button class="theme-pill" onclick="setTheme('amoled')" data-theme="amoled">AMOLED</button>
+    </div>
+  </div>
+
+  <div class="settings-section">
+    <div class="settings-label">qBittorrent URL</div>
+    <div style="display:flex;gap:8px">
+      <input id="setting-qbit-url" class="settings-input" placeholder="http://localhost:8081">
+      <button class="test-btn" onclick="testQbit()">Test</button>
+    </div>
+    <div id="qbit-status" class="settings-status"></div>
+  </div>
+
+  <div class="settings-section">
+    <div class="settings-label">Prowlarr URL (optional)</div>
+    <input id="setting-prowlarr-url" class="settings-input" placeholder="http://localhost:9696" style="margin-bottom:8px">
+    <div class="settings-label">Prowlarr API Key</div>
+    <div style="display:flex;gap:8px">
+      <input id="setting-prowlarr-key" class="settings-input" type="password" placeholder="••••••••••••">
+      <button class="test-btn" onclick="testProwlarr()">Test</button>
+    </div>
+    <div id="prowlarr-status" class="settings-status"></div>
+  </div>
+
+  <div class="settings-section">
+    <div class="settings-label">Download Paths</div>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="width:60px;font-size:12px;color:var(--text-muted)">Anime</span>
+        <input id="path-anime" class="settings-input" placeholder="/downloads/anime">
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="width:60px;font-size:12px;color:var(--text-muted)">Movies</span>
+        <input id="path-movies" class="settings-input" placeholder="/downloads/movies">
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="width:60px;font-size:12px;color:var(--text-muted)">Shows</span>
+        <input id="path-shows" class="settings-input" placeholder="/downloads/shows">
+      </div>
+    </div>
+  </div>
+
+  <button class="save-settings-btn" onclick="saveSettings()">Save Settings</button>
+  <div id="save-status" style="font-size:11px;text-align:center;margin-top:8px;min-height:16px;color:var(--text-muted)"></div>
+</div>
+
+<script>
+// ━━━ THEME ━━━
+function setTheme(name) {
+  document.getElementById('theme-css').href = '/static/themes/' + name + '.css';
+  localStorage.setItem('vm_theme', name);
+  document.querySelectorAll('[data-theme]').forEach(function(b) {
+    b.classList.toggle('active', b.dataset.theme === name);
+  });
+}
+setTheme(localStorage.getItem('vm_theme') || 'dark');
+
+// ━━━ SETTINGS PANEL ━━━
+function openSettings() {
+  document.getElementById('settings-panel').classList.add('open');
+  document.getElementById('overlay').classList.add('open');
+  loadSettings();
+}
+function closeSettings() {
+  document.getElementById('settings-panel').classList.remove('open');
+  document.getElementById('overlay').classList.remove('open');
+}
+
+async function loadSettings() {
+  try {
+    const r = await fetch('/api/config');
+    const d = await r.json();
+    document.getElementById('setting-qbit-url').value = d.qbit_url || '';
+    document.getElementById('setting-prowlarr-url').value = d.prowlarr_url || '';
+    if (d.save_paths) {
+      document.getElementById('path-anime').value = d.save_paths.anime || '';
+      document.getElementById('path-movies').value = d.save_paths.movies || '';
+      document.getElementById('path-shows').value = d.save_paths.shows || '';
+    }
+  } catch(e) {}
+}
+
+async function testQbit() {
+  const url = document.getElementById('setting-qbit-url').value;
+  const status = document.getElementById('qbit-status');
+  status.textContent = 'Testing...'; status.style.color = 'var(--text-muted)';
+  try {
+    const r = await fetch('/api/test-connection', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({type: 'qbit', url: url})
+    });
+    const d = await r.json();
+    status.textContent = d.ok ? '✓ Connected' : '✗ Failed';
+    status.style.color = d.ok ? 'var(--positive)' : 'var(--negative)';
+  } catch(e) {
+    status.textContent = '✗ Error'; status.style.color = 'var(--negative)';
+  }
+}
+
+async function testProwlarr() {
+  const url = document.getElementById('setting-prowlarr-url').value;
+  const key = document.getElementById('setting-prowlarr-key').value;
+  const status = document.getElementById('prowlarr-status');
+  status.textContent = 'Testing...'; status.style.color = 'var(--text-muted)';
+  try {
+    const r = await fetch('/api/test-connection', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({type: 'prowlarr', url: url, key: key})
+    });
+    const d = await r.json();
+    status.textContent = d.ok ? '✓ Connected' : '✗ Failed';
+    status.style.color = d.ok ? 'var(--positive)' : 'var(--negative)';
+  } catch(e) {
+    status.textContent = '✗ Error'; status.style.color = 'var(--negative)';
+  }
+}
+
+function saveSettings() {
+  document.getElementById('save-status').textContent =
+    'Restart the server for connection/path changes to take effect.';
+}
+
+// ━━━ KEYBOARD SHORTCUTS ━━━
+document.addEventListener('keydown', function(e) {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+    e.preventDefault();
+    document.getElementById('searchInput').focus();
+  }
+  if (e.key === 'Escape') {
+    closeSettings();
+    App.closeBatchModal();
+    document.querySelectorAll('.dl-dropdown').forEach(function(d) { d.remove(); });
+  }
+});
+
+// ━━━ APP ━━━
+const App = {
+  state: {
+    results: [], downloads: [], library: [], storage: null,
+    loading: false, query: '', category: 'all',
+    sources: ['prowlarr','solidtorrents','nyaa','animetosho','piratebay','knaben'],
+    indexers: [], sort: 'seeders', qualityFilter: 'all',
+    searchTimer: null, currentTab: 'search',
+    libFilter: 'all', libSort: 'added_on', libCategory: '',
+    batchOnly: false,
+  },
+
+  async init() {
+    this.bindEvents();
+    await this.checkConnection();
+    this.fetchIndexers();
+    this.fetchDownloads();
+    setInterval(() => this.fetchDownloads(), 5000);
+    this.searchInput.focus();
+  },
+
+  async fetchIndexers() {
+    try {
+      const r = await fetch('/api/indexers');
+      const data = await r.json();
+      this.state.indexers = data.indexers || [];
+      const el = document.getElementById('indexerCount');
+      if (this.state.indexers.length > 0) {
+        el.textContent = '📡 ' + this.state.indexers.length + ' indexers';
+        el.style.display = 'inline';
+        el.title = this.state.indexers.map(function(i) { return i.name; }).join(' · ');
+      }
+    } catch(e) {}
+  },
+
+  bindEvents() {
+    this.searchInput = document.getElementById('searchInput');
+    this.searchBtn = document.getElementById('searchBtn');
+    this.resultsGrid = document.getElementById('resultsGrid');
+    this.resultsCount = document.getElementById('resultsCount');
+    this.downloadsList = document.getElementById('downloadsList');
+    this.statusDot = document.getElementById('statusDot');
+    this.statusText = document.getElementById('statusText');
+    this.toastContainer = document.getElementById('toastContainer');
+    this.torrentContainer = document.getElementById('torrentContainer');
+    this.storageText = document.getElementById('storageText');
+    this.storageFill = document.getElementById('storageFill');
+
+    this.searchBtn.addEventListener('click', () => this.search());
+    this.searchInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') this.search(); });
+    this.searchInput.addEventListener('input', () => {
+      clearTimeout(this.state.searchTimer);
+      this.state.searchTimer = setTimeout(() => this.search(), 500);
+    });
+
+    document.querySelectorAll('[data-filter]').forEach((chip) => {
+      chip.addEventListener('click', () => {
+        const filter = chip.dataset.filter, value = chip.dataset.value;
+        document.querySelectorAll('[data-filter="' + filter + '"]').forEach((c) => c.classList.remove('active'));
+        chip.classList.add('active');
+        this.state[filter] = value;
+        if (this.state.query) this.search();
+      });
+    });
+
+    document.querySelectorAll('[data-libfilter]').forEach((chip) => {
+      chip.addEventListener('click', () => {
+        document.querySelectorAll('[data-libfilter]').forEach((c) => c.classList.remove('active'));
+        chip.classList.add('active');
+        this.state.libFilter = chip.dataset.libfilter;
+        this.renderLibrary();
+      });
+    });
+
+    document.querySelectorAll('[data-tab]').forEach((btn) => {
+      btn.addEventListener('click', () => this.switchTab(btn.dataset.tab));
+    });
+
+    document.getElementById('sourceSelect').addEventListener('change', (e) => {
+      const opts = [...e.target.options].filter((o) => o.selected).map((o) => o.value);
+      this.state.sources = opts.length ? opts : ['nyaa'];
+      if (this.state.query) this.search();
+    });
+
+    document.getElementById('sortSelect').addEventListener('change', (e) => {
+      this.state.sort = e.target.value;
+      if (this.state.results.length) this.sortResults();
+    });
+
+    document.getElementById('qualitySelect').addEventListener('change', (e) => {
+      this.state.qualityFilter = e.target.value;
+      if (this.state.results.length) this.renderResults();
+    });
+
+    document.getElementById('batchToggle').addEventListener('click', () => {
+      this.state.batchOnly = !this.state.batchOnly;
+      const btn = document.getElementById('batchToggle');
+      btn.classList.toggle('active', this.state.batchOnly);
+      btn.textContent = this.state.batchOnly ? '📦 Batch ON' : '📦 Batch';
+      this.state.sort = this.state.batchOnly ? 'size' : 'seeders';
+      document.getElementById('sortSelect').value = this.state.sort;
+      if (this.state.query) this.search();
+    });
+
+    document.getElementById('libSort').addEventListener('change', (e) => {
+      this.state.libSort = e.target.value; this.renderLibrary();
+    });
+    document.getElementById('libCategory').addEventListener('change', (e) => {
+      this.state.libCategory = e.target.value; this.renderLibrary();
+    });
+  },
+
+  switchTab(tab) {
+    this.state.currentTab = tab;
+    document.querySelectorAll('[data-tab]').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
+    document.getElementById('tabSearch').style.display = tab === 'search' ? 'block' : 'none';
+    document.getElementById('tabLibrary').style.display = tab === 'library' ? 'block' : 'none';
+    if (tab === 'library') {
+      this.fetchLibrary();
+      document.getElementById('downloadsSection').style.display = 'none';
+      if (!this.libraryInterval) this.libraryInterval = setInterval(() => this.fetchLibrary(), 10000);
+    } else {
+      document.getElementById('downloadsSection').style.display = 'block';
+      if (this.libraryInterval) { clearInterval(this.libraryInterval); this.libraryInterval = null; }
+    }
+  },
+
+  async checkConnection() {
+    try {
+      const r = await fetch('/health');
+      if (r.ok) {
+        const d = await r.json();
+        const ok = d.qbit === 'connected';
+        this.setStatus(ok ? 'connected' : 'error', ok ? 'qBittorrent' : 'qBit disconnected');
+        return ok;
+      }
+    } catch(e) {}
+    this.setStatus('error', 'Offline');
+    return false;
+  },
+
+  setStatus(state, label) {
+    this.statusDot.className = 'status-dot ' + state;
+    this.statusText.textContent = label || state;
+  },
+
+  showSkeletons() {
+    this.resultsGrid.innerHTML = Array(6).fill(0).map(() => `
+<div class="skeleton-card">
+  <div class="skeleton skeleton-poster"></div>
+  <div class="skeleton-body">
+    <div class="skeleton skeleton-line" style="width:80%"></div>
+    <div class="skeleton skeleton-line" style="width:55%"></div>
+    <div class="skeleton skeleton-line" style="width:35%"></div>
+  </div>
+</div>`).join('');
+  },
+
+  async search() {
+    const q = this.searchInput.value.trim();
+    if (!q || this.state.loading) return;
+    this.state.query = q;
+    this.state.loading = true;
+    this.searchBtn.disabled = true;
+    this.searchBtn.textContent = '...';
+    this.showSkeletons();
+    this.resultsCount.textContent = 'Searching...';
+
+    const params = new URLSearchParams({
+      q, category: this.state.category,
+      sources: this.state.sources.join(','),
+      sort: this.state.sort,
+      batch_only: this.state.batchOnly,
+    });
+
+    try {
+      const r = await fetch('/api/search?' + params);
+      const data = await r.json();
+      this.state.results = data.results || [];
+      await this.enrichResults();
+      this.renderResults();
+    } catch(e) {
+      this.showToast('Search failed: ' + e.message, 'error');
+      this.state.results = [];
+      this.renderResults();
+    } finally {
+      this.state.loading = false;
+      this.searchBtn.disabled = false;
+      this.searchBtn.textContent = 'Search';
+    }
+  },
+
+  async enrichResults() {
+    for (const r of this.state.results.slice(0, 10)) {
+      try {
+        const resp = await fetch('/api/check-downloaded?name=' + encodeURIComponent(r.name.slice(0,40)));
+        const data = await resp.json();
+        r.inLibrary = data.exists;
+        r.libTorrent = data.torrent;
+      } catch(e) { r.inLibrary = false; }
+    }
+  },
+
+  getSourceDisplay(r) {
+    if (r.source && r.source.startsWith('prowlarr:')) {
+      return r.source_display || r.source.split(':')[1] || 'Prowlarr';
+    }
+    return r.source || '';
+  },
+
+  renderResults() {
+    const results = this.state.results;
+    const filtered = this.state.qualityFilter !== 'all'
+      ? results.filter((r) => r.quality === this.state.qualityFilter)
+      : results;
+
+    this.resultsCount.textContent = filtered.length + ' result' + (filtered.length !== 1 ? 's' : '') +
+      (filtered.length !== results.length ? ' (' + results.length + ' total)' : '');
+
+    const breakdown = {};
+    results.forEach((r) => {
+      const s = this.getSourceDisplay(r);
+      breakdown[s] = (breakdown[s] || 0) + 1;
+    });
+    document.getElementById('sourceBreakdown').textContent =
+      Object.entries(breakdown).sort((a,b) => b[1]-a[1]).map(([k,v]) => k + ': ' + v).join(' · ');
+
+    if (!filtered.length) {
+      this.resultsGrid.innerHTML = results.length
+        ? '<div class="empty-state">No matches for current filters</div>'
+        : '<div class="empty-state">Search for movies, anime, or shows</div>';
+      return;
+    }
+
+    const qMap = {'4K':'q4k','1080p':'q1080','720p':'q720','480p':'qsd','BluRay':'q1080','WEB':'q720','HDTV':'qsd','HDR':'q4k'};
+    this.resultsGrid.innerHTML = filtered.map((r, i) => {
+      const qClass = qMap[r.quality] || 'qsd';
+      const seedCls = r.seeders > 20 ? '' : r.seeders > 0 ? 'low' : 'zero';
+      const inLib = r.inLibrary;
+      const libInfo = inLib && r.libTorrent
+        ? (r.libTorrent.progress < 100 ? '↓ ' + r.libTorrent.progress + '%' : '✓ In Library')
+        : '';
+      const ratingHtml = r.tmdb_rating
+        ? '<span style="background:rgba(245,158,11,.15);color:var(--warning);border:1px solid rgba(245,158,11,.3);padding:1px 6px;border-radius:4px;font-size:11px;margin-left:6px">⭐ ' + r.tmdb_rating.toFixed(1) + '</span>'
+        : '';
+      const posterHtml = r.poster
+        ? '<img src="' + this.esc(r.poster) + '" style="width:40px;height:60px;object-fit:cover;border-radius:4px;flex-shrink:0;margin-right:12px" loading="lazy" alt="">'
+        : '<div style="width:40px;height:60px;background:var(--bg-hover);border-radius:4px;flex-shrink:0;margin-right:12px;display:flex;align-items:center;justify-content:center;font-size:20px">' + (r.source_icon || '📡') + '</div>';
+
+      return '<div class="result-card" data-idx="' + i + '">' +
+        '<div class="result-top">' +
+          '<div class="result-name">' +
+            posterHtml +
+            '<span>' +
+              '<span class="src-badge">' + (r.source_icon||'') + '</span>' +
+              this.esc(r.name) +
+              (r.trusted ? ' <span class="trusted-badge">✓ Trusted</span>' : '') +
+              (inLib ? ' <span class="inlib-badge">' + libInfo + '</span>' : '') +
+              (r.is_batch ? ' <span class="batch-badge">📦 BATCH</span>' : '') +
+              ratingHtml +
+            '</span>' +
+          '</div>' +
+          (r.quality && r.quality !== 'Unknown' ? '<span class="quality-badge ' + qClass + '">' + r.quality + '</span>' : '') +
+        '</div>' +
+        '<div class="result-meta">' +
+          '<span>📦 ' + this.esc(r.size || '?') + '</span>' +
+          '<span class="seeders ' + seedCls + '">↑' + (r.seeders||0) + '</span>' +
+          '<span>↓' + (r.leechers||0) + '</span>' +
+          '<span>🔗 ' + this.esc(this.getSourceDisplay(r)) + '</span>' +
+        '</div>' +
+        '<div class="result-actions">' +
+          (inLib ? '' : '<div class="dl-popup"><button class="dl-btn" onclick="App.openDownloadPopup(this,' + i + ')">⬇ Download</button></div>') +
+          (r.magnet ? '<button class="copy-btn" onclick="App.copyMagnet(\'' + this.esc(r.magnet) + '\')">📋 Magnet</button>' : '') +
+          (!r.magnet && r.detail_url ? '<button class="copy-btn" onclick="App.fetchMagnet(' + i + ')">🔗 Get Magnet</button>' : '') +
+        '</div>' +
+      '</div>';
+    }).join('');
+  },
+
+  openDownloadPopup(btn, idx) {
+    const existing = btn.parentElement.querySelector('.dl-dropdown');
+    if (existing) { existing.remove(); return; }
+    document.querySelectorAll('.dl-dropdown').forEach((d) => d.remove());
+    const popup = document.createElement('div');
+    popup.className = 'dl-dropdown';
+    popup.innerHTML = ['anime','movies','shows','other'].map((cat) =>
+      '<button onclick="App.doDownload(' + idx + ',\'' + cat + '\');this.closest(\'.dl-dropdown\').remove()">⬇ ' +
+      cat.charAt(0).toUpperCase() + cat.slice(1) + '</button>'
+    ).join('');
+    btn.parentElement.appendChild(popup);
+    setTimeout(() => document.addEventListener('click', (e) => {
+      if (!popup.contains(e.target) && e.target !== btn) popup.remove();
+    }, {once: true}), 10);
+  },
+
+  async doDownload(idx, category) {
+    const r = this.state.results[idx];
+    if (!r) return;
+    let magnet = r.magnet;
+    if (!magnet && r.detail_url) {
+      try {
+        const resp = await fetch('/api/magnet?detail_url=' + encodeURIComponent(r.detail_url));
+        magnet = (await resp.json()).magnet;
+      } catch(e) { this.showToast('Failed to get magnet link', 'error'); return; }
+    }
+    if (!magnet) { this.showToast('No magnet link available', 'error'); return; }
+    try {
+      const resp = await fetch('/api/download?magnet=' + encodeURIComponent(magnet) + '&category=' + category, {method: 'POST'});
+      const data = await resp.json();
+      if (data.success) {
+        this.showToast('✓ Added to ' + category, 'success');
+        setTimeout(() => this.fetchDownloads(), 2000);
+      } else { this.showToast('✗ ' + data.message, 'error'); }
+    } catch(e) { this.showToast('✗ ' + e.message, 'error'); }
+  },
+
+  async fetchMagnet(idx) {
+    const r = this.state.results[idx];
+    if (!r || !r.detail_url) return;
+    try {
+      const resp = await fetch('/api/magnet?detail_url=' + encodeURIComponent(r.detail_url));
+      const data = await resp.json();
+      if (data.magnet) { r.magnet = data.magnet; this.renderResults(); this.showToast('Magnet fetched', 'success'); }
+      else { this.showToast('No magnet found', 'error'); }
+    } catch(e) { this.showToast('Failed', 'error'); }
+  },
+
+  copyMagnet(magnet) {
+    navigator.clipboard.writeText(magnet)
+      .then(() => this.showToast('Magnet copied', 'success'))
+      .catch(() => this.showToast('Failed to copy', 'error'));
+  },
+
+  sortResults() {
+    if (this.state.sort === 'size') {
+      this.state.results.sort((a, b) => this.parseSize(b.size) - this.parseSize(a.size));
+    } else {
+      this.state.results.sort((a, b) => (b.seeders||0) - (a.seeders||0));
+    }
+    this.renderResults();
+  },
+
+  async fetchDownloads() {
+    try {
+      const r = await fetch('/api/downloads');
+      if (!r.ok) return;
+      this.state.downloads = (await r.json()).torrents || [];
+      this.renderDownloads();
+    } catch(e) {}
+  },
+
+  renderDownloads() {
+    const downloads = this.state.downloads;
+    const section = document.getElementById('downloadsSection');
+    if (!downloads.length || this.state.currentTab === 'library') {
+      section.style.display = (this.state.currentTab === 'search' && downloads.length) ? 'block' : 'none';
+      return;
+    }
+    const active = downloads.filter((t) => ['downloading','metaDL','forcedDL','stalledDL'].includes(t.state));
+    const others = downloads.filter((t) => !active.includes(t));
+    const display = [...active, ...others].slice(0, 10);
+    document.getElementById('downloadsHeader').textContent = 'Downloads (' + downloads.length + ')';
+
+    this.downloadsList.innerHTML = display.map((t) => {
+      const seeding = t.state.includes('UP') || t.state === 'uploading';
+      const isPaused = t.state === 'pausedDL' || t.state === 'pausedUP';
+      const badgeCls = seeding ? 'seed' : t.state.includes('paused') ? 'paused' : t.state === 'error' ? 'error' : 'dl';
+      const stateLabel = seeding ? 'SEED' : t.state === 'downloading' ? 'DL' : isPaused ? 'PAUSED' : t.state === 'stalledDL' ? 'STALL' : t.state === 'error' ? 'ERR' : t.state;
+      const etaStr = t.eta > 0 ? this.formatEta(t.eta) : '';
+      return '<div class="dl-item">' +
+        '<div class="dl-name" title="' + this.esc(t.name) + '">' + this.esc(t.name) + '</div>' +
+        '<div class="dl-progress"><div class="dl-progress-fill ' + (seeding?'seeding':'') + '" style="width:' + t.progress + '%"></div></div>' +
+        '<div class="dl-meta">' +
+          '<span class="dl-badge ' + badgeCls + '">' + stateLabel + '</span>' +
+          '<span>' + t.progress + '%</span>' +
+          (t.dlspeed ? '<span>' + this.formatBytes(t.dlspeed) + '/s</span>' : '') +
+          (etaStr ? '<span>ETA ' + etaStr + '</span>' : '') +
+          (t.category ? '<span>' + this.esc(t.category) + '</span>' : '') +
+        '</div>' +
+        '<div class="dl-meta" style="margin-top:4px">' +
+          '<button class="dl-action-btn" onclick="App.toggleTorrent(\'' + t.hash + '\',\'' + t.state + '\')">' + (isPaused?'▶ Resume':'⏸ Pause') + '</button>' +
+          '<button class="dl-action-btn danger" onclick="App.deleteTorrent(\'' + t.hash + '\',false)">✕ Remove</button>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+  },
+
+  async fetchLibrary() {
+    try {
+      const [libResp, storageResp] = await Promise.all([
+        fetch('/api/library').then((r) => r.json()),
+        fetch('/api/storage').then((r) => r.json()),
+      ]);
+      this.state.library = libResp.torrents || [];
+      this.state.storage = storageResp;
+      this.renderLibrary();
+      this.renderStorage();
+    } catch(e) {}
+  },
+
+  renderStorage() {
+    const s = this.state.storage;
+    if (!s) return;
+    const freeGB = (s.total_free||0) / 1073741824;
+    const totalGB = (s.total||1) / 1073741824;
+    const usedGB = (s.total_used||0) / 1073741824;
+    this.storageFill.style.width = Math.min(100, usedGB / totalGB * 100) + '%';
+    const folderStr = s.folders
+      ? Object.entries(s.folders).filter(([,v]) => v > 0).map(([k,v]) => k + ': ' + this.formatBytes(v)).join(' · ')
+      : '';
+    this.storageText.textContent = freeGB.toFixed(0) + ' GB free · ' + folderStr;
+  },
+
+  renderLibrary() {
+    let torrents = this.state.library;
+    const filter = this.state.libFilter;
+    if (filter === 'downloading') torrents = torrents.filter((t) => ['downloading','metaDL','forcedDL','stalledDL'].includes(t.state));
+    else if (filter === 'completed') torrents = torrents.filter((t) => t.progress >= 100 || ['completed','pausedUP','queuedUP'].includes(t.state));
+    else if (filter === 'seeding') torrents = torrents.filter((t) => t.state.includes('UP') || t.state === 'uploading');
+    else if (filter === 'paused') torrents = torrents.filter((t) => t.state.includes('paused'));
+    else if (filter === 'error') torrents = torrents.filter((t) => ['error','missingFiles'].includes(t.state));
+    if (this.state.libCategory) torrents = torrents.filter((t) => t.category === this.state.libCategory);
+
+    const sort = this.state.libSort;
+    if (sort === 'added_on') torrents.sort((a,b) => (b.added_on||0)-(a.added_on||0));
+    else if (sort === 'name') torrents.sort((a,b) => (a.name||'').localeCompare(b.name||''));
+    else if (sort === 'size') torrents.sort((a,b) => (b.size||0)-(a.size||0));
+    else if (sort === 'progress') torrents.sort((a,b) => (b.progress||0)-(a.progress||0));
+
+    if (!torrents.length) { this.torrentContainer.innerHTML = '<div class="empty-state">No torrents found</div>'; return; }
+
+    const catIcons = {anime: '🌸', movies: '🎬', shows: '📺'};
+    this.torrentContainer.innerHTML = torrents.map((t) => {
+      const isDl = ['downloading','metaDL','forcedDL','stalledDL'].includes(t.state);
+      const isSeed = t.state.includes('UP') || t.state === 'uploading';
+      const isPaused = t.state.includes('paused');
+      const isError = ['error','missingFiles'].includes(t.state);
+      const isDone = t.progress >= 100 && !isSeed;
+      let stateLabel, badgeCls, fillCls;
+      if (isDl) { stateLabel = 'DL ' + t.progress + '%'; badgeCls = 'dl'; fillCls = 'dl'; }
+      else if (isSeed) { stateLabel = 'Seeding'; badgeCls = 'seed'; fillCls = 'seed'; }
+      else if (isDone) { stateLabel = 'Done ' + t.progress + '%'; badgeCls = 'done'; fillCls = 'seed'; }
+      else if (isPaused) { stateLabel = 'Paused ' + t.progress + '%'; badgeCls = 'paused'; fillCls = 'paused'; }
+      else if (isError) { stateLabel = 'Error'; badgeCls = 'error'; fillCls = 'error'; }
+      else { stateLabel = t.state; badgeCls = 'paused'; fillCls = 'paused'; }
+      const icon = catIcons[t.category] || '📁';
+      const isPausedState = t.state === 'pausedDL' || t.state === 'pausedUP';
+      return '<div class="torrent-row" data-hash="' + t.hash + '">' +
+        '<div class="torrent-row1">' +
+          '<span class="torrent-name" title="' + this.esc(t.name) + '">' + icon + ' ' + this.esc(t.name) + '</span>' +
+          '<span class="torrent-cat">' + (t.category || 'other') + '</span>' +
+        '</div>' +
+        '<div class="torrent-row2">' +
+          '<span>' + this.formatBytes(t.size) + '</span>' +
+          (t.added_on ? '<span>Added ' + this.timeAgo(t.added_on) + '</span>' : '') +
+          (t.ratio > 0 ? '<span>Ratio ' + t.ratio + '</span>' : '') +
+          (t.num_seeds > 0 ? '<span>↑' + t.num_seeds + '</span>' : '') +
+          (t.num_leechs > 0 ? '<span>↓' + t.num_leechs + '</span>' : '') +
+          (t.dlspeed > 0 ? '<span>' + this.formatBytes(t.dlspeed) + '/s</span>' : '') +
+          (t.eta > 0 && isDl ? '<span>ETA ' + this.formatEta(t.eta) + '</span>' : '') +
+        '</div>' +
+        '<div class="torrent-progress-bar"><div class="torrent-progress-fill ' + fillCls + '" style="width:' + Math.min(100,t.progress) + '%"></div></div>' +
+        '<div class="torrent-row3">' +
+          '<span class="state-badge ' + badgeCls + '">' + stateLabel + '</span>' +
+          '<button class="lib-action-btn" onclick="App.toggleTorrent(\'' + t.hash + '\',\'' + t.state + '\')">' + (isPausedState?'▶ Resume':'⏸ Pause') + '</button>' +
+          '<button class="lib-action-btn" onclick="App.confirmDelete(\'' + t.hash + '\',false,this)">🗑 Delete</button>' +
+          '<button class="lib-action-btn danger" onclick="App.confirmDelete(\'' + t.hash + '\',true,this)">🗑+files Delete+Files</button>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+  },
+
+  confirmDelete(hash, deleteFiles, btn) {
+    const row = btn.closest('.torrent-row');
+    const existing = row.querySelector('.confirm-box');
+    if (existing) { existing.remove(); return; }
+    const box = document.createElement('div');
+    box.className = 'confirm-box ' + (deleteFiles ? 'danger' : 'normal');
+    box.innerHTML =
+      (deleteFiles ? '<span style="color:var(--negative)">⚠️ Delete files?</span>' : 'Remove from list?') +
+      '<button class="confirm-yes ' + (deleteFiles?'danger':'normal') + '" onclick="App.deleteTorrent(\'' + hash + '\',' + deleteFiles + ');this.closest(\'.confirm-box\').remove()">Yes</button>' +
+      '<button class="confirm-no" onclick="this.closest(\'.confirm-box\').remove()">Cancel</button>';
+    row.querySelector('.torrent-row3').appendChild(box);
+  },
+
+  async deleteTorrent(hash, deleteFiles) {
+    const resp = await fetch('/api/torrent/' + hash + '?delete_files=' + deleteFiles, {method: 'DELETE'});
+    const data = await resp.json();
+    if (data.success) {
+      this.showToast(deleteFiles ? 'Torrent and files deleted' : 'Torrent removed', 'success');
+      this.fetchLibrary(); this.fetchDownloads();
+    } else { this.showToast('Delete failed', 'error'); }
+  },
+
+  async toggleTorrent(hash, currentState) {
+    const isPaused = currentState === 'pausedDL' || currentState === 'pausedUP';
+    const action = isPaused ? 'resume' : 'pause';
+    const resp = await fetch('/api/torrent/' + hash + '/' + action, {method: 'POST'});
+    const data = await resp.json();
+    if (data.success) {
+      this.showToast(isPaused ? 'Resumed' : 'Paused', 'info');
+      setTimeout(() => { this.fetchLibrary(); this.fetchDownloads(); }, 1000);
+    } else { this.showToast('Action failed', 'error'); }
+  },
+
+  openBatchModal() {
+    document.getElementById('batch-modal').style.display = 'flex';
+    document.getElementById('batch-name').focus();
+  },
+
+  closeBatchModal() {
+    document.getElementById('batch-modal').style.display = 'none';
+    document.getElementById('batch-result').textContent = '';
+  },
+
+  async startBatchDownload() {
+    const name = document.getElementById('batch-name').value.trim();
+    const start = parseInt(document.getElementById('batch-start').value) || 1;
+    const end = parseInt(document.getElementById('batch-end').value) || 1;
+    const quality = document.getElementById('batch-quality').value;
+    const source = document.getElementById('batch-source').value;
+    const category = document.getElementById('batch-category').value;
+    const resultEl = document.getElementById('batch-result');
+    const btn = document.getElementById('batch-submit-btn');
+
+    if (!name) { resultEl.textContent = 'Enter an anime/show name'; resultEl.style.color = 'var(--negative)'; return; }
+    resultEl.textContent = 'Searching...'; resultEl.style.color = 'var(--accent)';
+    btn.disabled = true; btn.textContent = 'Searching...';
+
+    try {
+      const resp = await fetch('/api/batch-download', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({name, ep_start: start, ep_end: end, quality, source, category}),
+      });
+      const data = await resp.json();
+      if (data.success) {
+        resultEl.textContent = '✓ Found ' + data.found + ' → Queued ' + data.queued + ' | Failed ' + data.failed + ' | Skipped ' + data.skipped;
+        resultEl.style.color = 'var(--positive)';
+        setTimeout(() => { this.fetchLibrary(); this.fetchDownloads(); }, 2000);
+      } else {
+        resultEl.textContent = '✗ ' + (data.message || data.error);
+        resultEl.style.color = 'var(--negative)';
+      }
+    } catch(e) {
+      resultEl.textContent = '✗ Request failed: ' + e.message;
+      resultEl.style.color = 'var(--negative)';
+    } finally {
+      btn.disabled = false; btn.textContent = '⬇ Download Episodes';
+    }
+  },
+
+  showToast(msg, type) {
+    const el = document.createElement('div');
+    el.className = 'toast ' + type;
+    el.textContent = msg;
+    this.toastContainer.appendChild(el);
+    setTimeout(() => el.remove(), 3000);
+  },
+
+  formatBytes(bytes) {
+    if (!bytes) return '0 B';
+    const units = ['B','KB','MB','GB','TB'];
+    const i = Math.min(units.length-1, Math.floor(Math.log(bytes)/Math.log(1024)));
+    return (bytes/Math.pow(1024,Math.max(1,i))).toFixed(i>0?1:0) + ' ' + units[i];
+  },
+
+  formatEta(seconds) {
+    if (!seconds || seconds < 0 || seconds > 86400*30) return '∞';
+    if (seconds < 60) return seconds + 's';
+    if (seconds < 3600) return Math.floor(seconds/60) + 'm ' + (seconds%60) + 's';
+    return Math.floor(seconds/3600) + 'h ' + Math.floor((seconds%3600)/60) + 'm';
+  },
+
+  timeAgo(timestamp) {
+    const diff = Date.now()/1000 - timestamp;
+    if (diff < 60) return 'just now';
+    if (diff < 3600) return Math.floor(diff/60) + 'm ago';
+    if (diff < 86400) return Math.floor(diff/3600) + 'h ago';
+    if (diff < 604800) return Math.floor(diff/86400) + 'd ago';
+    return new Date(timestamp*1000).toLocaleDateString();
+  },
+
+  parseSize(s) {
+    if (!s) return 0;
+    const m = s.match(/([\d.]+)\s*(TB|GB|MB|KB)/i);
+    if (!m) return 0;
+    const units = {TB:1e12,GB:1e9,MB:1e6,KB:1e3};
+    return parseFloat(m[1]) * (units[m[2].toUpperCase()] || 0);
+  },
+
+  esc(s) {
+    if (!s) return '';
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  },
+};
+
+document.addEventListener('DOMContentLoaded', function() { App.init(); });
+</script>
+</body>
+</html>

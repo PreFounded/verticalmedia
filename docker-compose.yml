@@ -1,0 +1,22 @@
+services:
+  verticalmedia:
+    image: ghcr.io/prefounded/verticalmedia:latest
+    # build: .
+    container_name: verticalmedia
+    restart: unless-stopped
+    ports:
+      - "7171:7171"
+    environment:
+      # qBittorrent (required)
+      - QBIT_URL=http://qbittorrent:8080
+      - QBIT_USERNAME=admin
+      - QBIT_PASSWORD=adminadmin
+      # Prowlarr (optional)
+      - PROWLARR_URL=http://prowlarr:9696
+      - PROWLARR_KEY=your_prowlarr_api_key
+      # Download paths (must match qBittorrent save paths)
+      - PATH_ANIME=/downloads/anime
+      - PATH_MOVIES=/downloads/movies
+      - PATH_SHOWS=/downloads/shows
+    volumes:
+      - ./config:/app/config

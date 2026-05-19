@@ -1,0 +1,16 @@
+:root {
+  --bg: #1e1e2e;
+  --bg-base: #181825;
+  --bg-elevated: #313244;
+  --bg-hover: #45475a;
+  --accent: #cba6f7;
+  --accent-dim: rgba(203,166,247,0.10);
+  --accent-border: rgba(203,166,247,0.25);
+  --positive: #a6e3a1;
+  --negative: #f38ba8;
+  --warning: #fab387;
+  --purple: #cba6f7;
+  --text: #cdd6f4;
+  --text-muted: #6c7086;
+  --border: rgba(255,255,255,0.08);
+}
