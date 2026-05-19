@@ -3,16 +3,35 @@
 .SYNOPSIS
     verticalmedia Windows installer
 .DESCRIPTION
-    Fully self-contained installer for verticalmedia on Windows.
-    Automatically installs Python and Git if missing.
+    Fully self-contained installer. Installs Python, Git and qBittorrent
+    automatically if missing. Configures everything unattended.
 .EXAMPLE
     irm https://raw.githubusercontent.com/PreFounded/verticalmedia/main/install.ps1 | iex
 #>
 
+# ─────────────────────────────────────────────────────────────────────────────
+#  Admin self-elevation — must be first
+# ─────────────────────────────────────────────────────────────────────────────
+$isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
+    [Security.Principal.WindowsBuiltInRole]::Administrator)
+
+if (-not $isAdmin) {
+    Write-Host "  Requesting administrator privileges..." -ForegroundColor Yellow
+    $relaunch = if ($PSCommandPath) {
+        "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`""
+    } else {
+        # Running via irm | iex — re-download in the elevated session
+        $url = "https://raw.githubusercontent.com/PreFounded/verticalmedia/main/install.ps1"
+        "-NoProfile -ExecutionPolicy Bypass -Command `"[Net.ServicePointManager]::SecurityProtocol='Tls12'; irm '$url' | iex`""
+    }
+    Start-Process powershell $relaunch -Verb RunAs -Wait
+    exit
+}
+
 $ErrorActionPreference = "Continue"
-$REPO        = "https://github.com/PreFounded/verticalmedia.git"
-$PY_VERSION  = "3.12.7"
-$PY_URL      = "https://www.python.org/ftp/python/$PY_VERSION/python-$PY_VERSION-amd64.exe"
+$REPO       = "https://github.com/PreFounded/verticalmedia.git"
+$PY_VERSION = "3.12.7"
+$PY_URL     = "https://www.python.org/ftp/python/$PY_VERSION/python-$PY_VERSION-amd64.exe"
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  Helpers
@@ -28,6 +47,7 @@ function Show-Header {
     Write-Host "   ╚████╔╝ ██║ ╚═╝ ██║" -ForegroundColor Cyan
     Write-Host "    ╚═══╝  ╚═╝     ╚═╝  " -NoNewline -ForegroundColor Cyan
     Write-Host "verticalmedia installer" -ForegroundColor White
+    Write-Host "  (running as Administrator)" -ForegroundColor DarkGray
     Write-Host ""
 }
 
@@ -45,6 +65,7 @@ function Stop-Install([string]$msg) {
     Write-Host ""
     Write-Host "  x  $msg" -ForegroundColor Red
     Write-Host ""
+    Read-Host "  Press Enter to exit"
     exit 1
 }
 
@@ -78,17 +99,17 @@ function Refresh-Path {
 
 function Download-File([string]$url, [string]$dest) {
     Write-Info "Downloading $(Split-Path $url -Leaf)..."
+    [Net.ServicePointManager]::SecurityProtocol = "Tls12"
     $wc = New-Object System.Net.WebClient
     $wc.DownloadFile($url, $dest)
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  Dependency installers
+#  Python installer
 # ─────────────────────────────────────────────────────────────────────────────
 
 function Install-Python {
     Show-Section "Installing Python $PY_VERSION"
-
     $winget = Get-Command winget -ErrorAction SilentlyContinue
     if ($winget) {
         Write-Info "Using winget..."
@@ -98,25 +119,22 @@ function Install-Python {
     } else {
         $installer = Join-Path $env:TEMP "python-installer.exe"
         Download-File $PY_URL $installer
-        Write-Info "Running Python installer silently..."
-        $args = "/quiet InstallAllUsers=0 PrependPath=1 Include_launcher=0 Include_test=0"
-        Start-Process -FilePath $installer -ArgumentList $args -Wait
+        Write-Info "Running installer silently..."
+        Start-Process $installer "/quiet InstallAllUsers=1 PrependPath=1 Include_launcher=0 Include_test=0" -Wait
         Remove-Item $installer -Force
         Refresh-Path
     }
-
-    # Verify
-    try {
-        $v = python --version 2>&1
-        Write-Ok "Python installed: $v"
-    } catch {
-        Stop-Install "Python installation failed. Install manually from https://python.org/downloads — tick 'Add to PATH'."
-    }
+    $v = python --version 2>&1
+    if ($LASTEXITCODE -ne 0) { Stop-Install "Python installation failed. Install manually from https://python.org/downloads" }
+    Write-Ok "Python installed: $v"
 }
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  Git installer
+# ─────────────────────────────────────────────────────────────────────────────
 
 function Install-Git {
     Show-Section "Installing Git"
-
     $winget = Get-Command winget -ErrorAction SilentlyContinue
     if ($winget) {
         Write-Info "Using winget..."
@@ -124,34 +142,227 @@ function Install-Git {
             --accept-package-agreements --accept-source-agreements -e --silent
         Refresh-Path
     } else {
-        Write-Info "Fetching latest Git for Windows release..."
-        try {
-            $release = Invoke-RestMethod "https://api.github.com/repos/git-for-windows/git/releases/latest"
-            $asset   = $release.assets | Where-Object { $_.name -match "64-bit\.exe$" } | Select-Object -First 1
-            $gitUrl  = $asset.browser_download_url
-        } catch {
-            Stop-Install "Could not fetch Git release info. Install manually from https://git-scm.com/download/win"
-        }
+        Write-Info "Fetching latest Git release..."
+        $release = Invoke-RestMethod "https://api.github.com/repos/git-for-windows/git/releases/latest"
+        $asset   = $release.assets | Where-Object { $_.name -match "64-bit\.exe$" } | Select-Object -First 1
+        if (-not $asset) { Stop-Install "Could not find Git installer. Get it from https://git-scm.com/download/win" }
         $installer = Join-Path $env:TEMP "git-installer.exe"
-        Download-File $gitUrl $installer
-        Write-Info "Running Git installer silently..."
-        $args = "/VERYSILENT /NORESTART /NOCANCEL /SP- /CLOSEAPPLICATIONS /COMPONENTS=`"icons,ext\reg\shellhere,assoc,assoc_sh`""
-        Start-Process -FilePath $installer -ArgumentList $args -Wait
+        Download-File $asset.browser_download_url $installer
+        Write-Info "Running installer silently..."
+        Start-Process $installer "/VERYSILENT /NORESTART /NOCANCEL /SP-" -Wait
         Remove-Item $installer -Force
         Refresh-Path
     }
+    $v = git --version 2>&1
+    if ($LASTEXITCODE -ne 0) { Stop-Install "Git installation failed. Install manually from https://git-scm.com/download/win" }
+    Write-Ok "Git installed: $v"
+}
 
-    # Verify
-    try {
-        $v = git --version 2>&1
-        Write-Ok "Git installed: $v"
-    } catch {
-        Stop-Install "Git installation failed. Install manually from https://git-scm.com/download/win"
+# ─────────────────────────────────────────────────────────────────────────────
+#  qBittorrent — find, install, configure
+# ─────────────────────────────────────────────────────────────────────────────
+
+function Find-QBitExe {
+    $candidates = @(
+        "$env:ProgramFiles\qBittorrent\qbittorrent.exe",
+        "${env:ProgramFiles(x86)}\qBittorrent\qbittorrent.exe"
+    )
+    foreach ($c in $candidates) { if (Test-Path $c) { return $c } }
+
+    # Registry lookup
+    foreach ($hive in @("HKLM:\SOFTWARE", "HKLM:\SOFTWARE\WOW6432Node")) {
+        $loc = (Get-ItemProperty "$hive\Microsoft\Windows\CurrentVersion\Uninstall\qBittorrent" -ErrorAction SilentlyContinue).InstallLocation
+        if ($loc) {
+            $exe = Join-Path $loc "qbittorrent.exe"
+            if (Test-Path $exe) { return $exe }
+        }
+    }
+
+    $cmd = Get-Command qbittorrent -ErrorAction SilentlyContinue
+    if ($cmd) { return $cmd.Source }
+    return $null
+}
+
+function Install-QBittorrent {
+    Show-Section "Installing qBittorrent"
+    $winget = Get-Command winget -ErrorAction SilentlyContinue
+    if ($winget) {
+        Write-Info "Using winget..."
+        winget install --id qBittorrent.qBittorrent --source winget `
+            --accept-package-agreements --accept-source-agreements -e --silent
+        Refresh-Path
+    } else {
+        Write-Info "Fetching latest qBittorrent release..."
+        $release = Invoke-RestMethod "https://api.github.com/repos/qbittorrent/qBittorrent/releases/latest"
+        $asset   = $release.assets | Where-Object { $_.name -match "x64_setup\.exe$" -or $_.name -match "x86_64.*\.exe$" } | Select-Object -First 1
+        if (-not $asset) {
+            # Fallback pattern for different naming conventions
+            $asset = $release.assets | Where-Object { $_.name -match "setup\.exe$" } | Select-Object -First 1
+        }
+        if (-not $asset) { Stop-Install "Could not find qBittorrent installer. Download from https://qbittorrent.org" }
+        $installer = Join-Path $env:TEMP "qbittorrent-setup.exe"
+        Download-File $asset.browser_download_url $installer
+        Write-Info "Running installer silently..."
+        Start-Process $installer "/S" -Wait   # NSIS silent flag
+        Remove-Item $installer -Force
+        Refresh-Path
+    }
+    $exe = Find-QBitExe
+    if (-not $exe) { Stop-Install "qBittorrent installation failed or exe not found." }
+    Write-Ok "qBittorrent installed: $exe"
+    return $exe
+}
+
+function Update-IniSection([string]$iniPath, [string]$section, [hashtable]$keys) {
+    # Parse the existing ini into an ordered structure
+    $ini     = [ordered]@{}
+    $secList = [System.Collections.Generic.List[string]]::new()
+    $curSec  = $null
+
+    if (Test-Path $iniPath) {
+        foreach ($line in [System.IO.File]::ReadAllLines($iniPath, [Text.Encoding]::UTF8)) {
+            $line = $line.TrimEnd()
+            if ($line -match '^\[(.+)\]$') {
+                $curSec = $Matches[1]
+                if (-not $ini.ContainsKey($curSec)) {
+                    $ini[$curSec] = [ordered]@{}
+                    $secList.Add($curSec)
+                }
+            } elseif ($line -match '^([^=]+)=(.*)$' -and $curSec) {
+                $ini[$curSec][$Matches[1]] = $Matches[2]
+            }
+        }
+    }
+
+    # Apply updates
+    if (-not $ini.ContainsKey($section)) {
+        $ini[$section] = [ordered]@{}
+        $secList.Add($section)
+    }
+    foreach ($kv in $keys.GetEnumerator()) { $ini[$section][$kv.Key] = $kv.Value }
+
+    # Write back
+    New-Item -ItemType Directory -Path (Split-Path $iniPath -Parent) -Force | Out-Null
+    $out = [System.Collections.Generic.List[string]]::new()
+    foreach ($sec in $secList) {
+        $out.Add("[$sec]")
+        foreach ($kv in $ini[$sec].GetEnumerator()) { $out.Add("$($kv.Key)=$($kv.Value)") }
+        $out.Add("")
+    }
+    [System.IO.File]::WriteAllLines($iniPath, $out, [Text.Encoding]::UTF8)
+}
+
+function Install-NSSM {
+    Show-Section "Installing NSSM (Windows service manager)"
+    Write-Info "NSSM runs verticalmedia as a proper Windows service that starts with the OS."
+    $winget = Get-Command winget -ErrorAction SilentlyContinue
+    if ($winget) {
+        Write-Info "Using winget..."
+        winget install --id NSSM.NSSM --source winget `
+            --accept-package-agreements --accept-source-agreements -e --silent
+        Refresh-Path
+    } else {
+        Write-Info "Downloading NSSM 2.24 from nssm.cc..."
+        $zipPath = Join-Path $env:TEMP "nssm.zip"
+        try {
+            Download-File "https://nssm.cc/release/nssm-2.24.zip" $zipPath
+            $extractDir = Join-Path $env:TEMP "nssm-extract"
+            Expand-Archive -Path $zipPath -DestinationPath $extractDir -Force
+            # Prefer 64-bit binary
+            $nssmExe = Get-ChildItem "$extractDir" -Filter "nssm.exe" -Recurse |
+                       Where-Object { $_.FullName -match "win64" } |
+                       Select-Object -First 1
+            if (-not $nssmExe) {
+                $nssmExe = Get-ChildItem "$extractDir" -Filter "nssm.exe" -Recurse |
+                           Select-Object -First 1
+            }
+            if ($nssmExe) {
+                Copy-Item $nssmExe.FullName "C:\Windows\System32\nssm.exe" -Force
+                Write-Ok "NSSM installed to System32"
+            } else {
+                Write-Warn "Could not locate nssm.exe in archive — falling back to Task Scheduler."
+            }
+        } catch {
+            Write-Warn "NSSM download failed: $_ — falling back to Task Scheduler."
+        } finally {
+            Remove-Item $zipPath -Force -ErrorAction SilentlyContinue
+            Remove-Item (Join-Path $env:TEMP "nssm-extract") -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+    Refresh-Path
+    $check = Get-Command nssm -ErrorAction SilentlyContinue
+    if ($check) { Write-Ok "NSSM ready: $(nssm version 2>&1 | Select-Object -First 1)" }
+}
+
+function Configure-QBittorrent([string]$qbitExe, [string]$port, [string]$username,
+                               [hashtable]$categories) {
+    $iniPath = Join-Path $env:APPDATA "qBittorrent\qBittorrent.ini"
+
+    # Stop qBittorrent if running so we can safely write the ini
+    $proc = Get-Process qbittorrent -ErrorAction SilentlyContinue
+    if ($proc) {
+        Write-Info "Stopping qBittorrent to apply configuration..."
+        $proc | Stop-Process -Force
+        Start-Sleep -Seconds 2
+    }
+
+    Write-Info "Writing qBittorrent configuration..."
+
+    # Accept EULA / legal notice (skips first-run dialog)
+    Update-IniSection $iniPath "LegalNotice" @{ "Accepted" = "true" }
+
+    # Web UI settings — LocalHostAuth=false means no password needed from localhost
+    Update-IniSection $iniPath "Preferences" @{
+        "WebUI\Enabled"             = "true"
+        "WebUI\Port"                = $port
+        "WebUI\LocalHostAuth"       = "false"
+        "WebUI\Username"            = $username
+        "General\StartMinimized"    = "true"
+        "General\CloseToTray"       = "true"
+        "Queueing\MaxActiveDownloads" = "5"
+        "Queueing\MaxActiveTorrents"  = "10"
+    }
+
+    # Start qBittorrent minimised to tray
+    Write-Info "Starting qBittorrent..."
+    Start-Process $qbitExe -WindowStyle Hidden
+    Start-Sleep -Seconds 3   # give it a moment to start the Web UI
+
+    # Wait for the Web UI to be ready (up to 20 seconds)
+    $baseUrl = "http://localhost:$port"
+    $ready   = $false
+    for ($i = 0; $i -lt 20; $i++) {
+        try {
+            $r = Invoke-WebRequest "$baseUrl/api/v2/app/version" -UseBasicParsing -TimeoutSec 1 -ErrorAction Stop
+            if ($r.StatusCode -eq 200) { $ready = $true; break }
+        } catch { }
+        Start-Sleep -Seconds 1
+    }
+
+    if (-not $ready) {
+        Write-Warn "qBittorrent Web UI did not respond in time — categories will need to be set manually."
+        return
+    }
+    Write-Ok "qBittorrent Web UI is up at $baseUrl"
+
+    # Create download categories via the API
+    foreach ($kv in $categories.GetEnumerator()) {
+        $name     = $kv.Key
+        $savePath = $kv.Value
+        try {
+            $body = "category=$name&savePath=$([Uri]::EscapeDataString($savePath))"
+            Invoke-WebRequest "$baseUrl/api/v2/torrents/createCategory" -Method POST `
+                -Body $body -ContentType "application/x-www-form-urlencoded" `
+                -UseBasicParsing -ErrorAction Stop | Out-Null
+            Write-Ok "Category '$name' → $savePath"
+        } catch {
+            Write-Warn "Could not create category '$name' — add it manually in qBittorrent."
+        }
     }
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  Step 1 — Requirements (auto-install if missing)
+#  Step 1 — Requirements: Python + Git
 # ─────────────────────────────────────────────────────────────────────────────
 
 Show-Header
@@ -163,50 +374,101 @@ try {
     $pyraw = python --version 2>&1
     if ($pyraw -match "Python (\d+)\.(\d+)") {
         $maj = [int]$Matches[1]; $min = [int]$Matches[2]
-        if ($maj -gt 3 -or ($maj -eq 3 -and $min -ge 10)) {
-            Write-Ok $pyraw
-            $pythonOk = $true
-        } else {
-            Write-Warn "Found $pyraw but 3.10+ is required — will install a newer version."
-        }
+        if ($maj -gt 3 -or ($maj -eq 3 -and $min -ge 10)) { Write-Ok $pyraw; $pythonOk = $true }
+        else { Write-Warn "Found $pyraw — 3.10+ required, will upgrade." }
     }
-} catch {
-    Write-Warn "Python not found — will install automatically."
-}
+} catch { Write-Warn "Python not found — will install automatically." }
 if (-not $pythonOk) { Install-Python }
 
 # Git
 $gitOk = $false
-try {
-    $gitraw = git --version 2>&1
-    Write-Ok $gitraw
-    $gitOk = $true
-} catch {
-    Write-Warn "Git not found — will install automatically."
-}
+try { $gitraw = git --version 2>&1; Write-Ok $gitraw; $gitOk = $true }
+catch { Write-Warn "Git not found — will install automatically." }
 if (-not $gitOk) { Install-Git }
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  Step 2 — Install location
+#  Step 2 — qBittorrent
+# ─────────────────────────────────────────────────────────────────────────────
+
+Show-Section "qBittorrent"
+Write-Info "qBittorrent handles all torrent downloads. verticalmedia talks to it via its Web UI."
+Write-Host ""
+
+$qbitExe      = Find-QBitExe
+$qbitInstalled = $null -ne $qbitExe
+
+if ($qbitInstalled) {
+    Write-Ok "qBittorrent found: $qbitExe"
+} else {
+    Write-Warn "qBittorrent not found — will install automatically."
+    $qbitExe = Install-QBittorrent
+}
+
+$qbitPort = Read-Input "qBittorrent Web UI port" "8081"
+$qbitUser = Read-Input "qBittorrent username"    "admin"
+
+Show-Section "Download paths"
+Write-Info "Where should torrents be saved? These become qBittorrent categories."
+Write-Info "Use full Windows paths — e.g. D:\Media\Anime"
+Write-Host ""
+$pathAnime  = Read-Input "Anime save path"    "C:\Downloads\Anime"
+$pathMovies = Read-Input "Movies save path"   "C:\Downloads\Movies"
+$pathShows  = Read-Input "TV shows save path" "C:\Downloads\Shows"
+
+# Create save path directories if they don't exist
+foreach ($p in @($pathAnime, $pathMovies, $pathShows)) {
+    if (-not (Test-Path $p)) {
+        New-Item -ItemType Directory -Path $p -Force | Out-Null
+        Write-Info "Created: $p"
+    }
+}
+
+# Configure Web UI + categories unattended
+Configure-QBittorrent $qbitExe $qbitPort $qbitUser @{
+    "anime"  = $pathAnime
+    "movies" = $pathMovies
+    "shows"  = $pathShows
+}
+
+# Add qBittorrent to Windows startup (runs at login, hidden to tray)
+$qbitStartup = "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run"
+Set-ItemProperty $qbitStartup -Name "qBittorrent" -Value "`"$qbitExe`" --no-splash" -ErrorAction SilentlyContinue
+Write-Ok "qBittorrent added to Windows startup"
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  Step 3 — verticalmedia install location
 # ─────────────────────────────────────────────────────────────────────────────
 
 Show-Section "Install location"
 
+Write-Info "This is where the verticalmedia app files will be placed."
+Write-Info "The folder will be created automatically if it doesn't exist."
+Write-Info "Avoid paths with spaces (e.g. prefer C:\Apps\verticalmedia)."
+Write-Host ""
+
 $defaultDir = Join-Path $env:USERPROFILE "verticalmedia"
-$installDir = Read-Input "Where should verticalmedia be installed?" $defaultDir
+$installDir = Read-Input "Install path" $defaultDir
+
+if ([string]::IsNullOrWhiteSpace($installDir)) {
+    Write-Warn "No path entered — using default: $defaultDir"
+    $installDir = $defaultDir
+}
 
 if (Test-Path (Join-Path $installDir ".git")) {
     Write-Warn "Existing installation found — will update to latest."
 } elseif (Test-Path $installDir) {
-    Write-Warn "Folder exists but is not a git repo — files may be overwritten."
+    Write-Warn "Folder already exists — app files will be placed inside it."
+} else {
+    try {
+        New-Item -ItemType Directory -Path $installDir -Force | Out-Null
+    } catch {
+        Stop-Install "Cannot create directory: $installDir`nCheck that you have write permission to the parent folder."
+    }
 }
-# Do NOT pre-create the directory — git clone creates it itself.
-# Creating it first causes git to refuse cloning into an existing path.
-
-Write-Info "Location: $installDir"
+Write-Ok "Install path: $installDir"
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  Step 3 — Clone / update
+#  Step 4 — Clone / update
 # ─────────────────────────────────────────────────────────────────────────────
 
 Show-Section "Downloading verticalmedia"
@@ -214,16 +476,16 @@ Show-Section "Downloading verticalmedia"
 if (Test-Path (Join-Path $installDir ".git")) {
     Write-Info "Pulling latest changes..."
     git -C $installDir pull --ff-only
-    if ($LASTEXITCODE -ne 0) { Stop-Install "git pull failed. Check your network connection and try again." }
+    if ($LASTEXITCODE -ne 0) { Stop-Install "git pull failed. Check your network and try again." }
 } else {
     Write-Info "Cloning repository..."
     git clone $REPO $installDir
-    if ($LASTEXITCODE -ne 0) { Stop-Install "git clone failed. Check your network connection and try again." }
+    if ($LASTEXITCODE -ne 0) { Stop-Install "git clone failed. Check your network and try again." }
 }
 Write-Ok "Files ready"
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  Step 4 — Python virtual environment + deps
+#  Step 5 — Python virtual environment + dependencies
 # ─────────────────────────────────────────────────────────────────────────────
 
 Show-Section "Python environment"
@@ -241,15 +503,15 @@ if (-not (Test-Path $venv)) {
 Write-Info "Installing dependencies (this takes a moment)..."
 & $pipExe install -q --upgrade pip
 & $pipExe install -q -r (Join-Path $installDir "requirements.txt")
-if ($LASTEXITCODE -ne 0) { Stop-Install "pip install failed. Check the error above." }
+if ($LASTEXITCODE -ne 0) { Stop-Install "pip install failed. See error above." }
 Write-Ok "Dependencies installed"
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  Step 5 — Configuration
+#  Step 6 — Configuration (.env)
 # ─────────────────────────────────────────────────────────────────────────────
 
-$envFile   = Join-Path $installDir ".env"
-$doConfig  = $true
+$envFile  = Join-Path $installDir ".env"
+$doConfig = $true
 
 if (Test-Path $envFile) {
     Show-Section "Existing configuration found"
@@ -257,47 +519,33 @@ if (Test-Path $envFile) {
 }
 
 if ($doConfig) {
-    Show-Section "qBittorrent"
-    Write-Info "verticalmedia sends torrents directly to qBittorrent."
-    Write-Info "Enable its Web UI first: qBittorrent > Preferences > Web UI > Enable Web UI"
-    Write-Host ""
-    $qbitUrl  = Read-Input "qBittorrent Web UI URL"  "http://localhost:8081"
-    $qbitUser = Read-Input "qBittorrent username"    "admin"
-    $qbitPass = Read-Input "qBittorrent password"    "adminadmin"
-
     Show-Section "Prowlarr (optional)"
     Write-Info "Prowlarr aggregates many torrent indexers into one API."
-    Write-Info "Skip this if you don't use it — it can be added later in Settings."
+    Write-Info "Skip this if you don't use it — configurable later via Settings."
     Write-Host ""
-    $useProwlarr = Read-YN "Do you use Prowlarr?" $false
     $prowlarrUrl = ""; $prowlarrKey = ""
-    if ($useProwlarr) {
+    if (Read-YN "Do you use Prowlarr?" $false) {
         $prowlarrUrl = Read-Input "Prowlarr URL"     "http://localhost:9696"
         $prowlarrKey = Read-Input "Prowlarr API key" ""
     }
 
-    Show-Section "Download paths"
-    Write-Info "Full Windows paths for where torrents will be saved."
-    Write-Info "These must match the category save paths in qBittorrent."
-    Write-Host ""
-    $pathAnime  = Read-Input "Anime save path"    "C:\Downloads\Anime"
-    $pathMovies = Read-Input "Movies save path"   "C:\Downloads\Movies"
-    $pathShows  = Read-Input "TV shows save path" "C:\Downloads\Shows"
-
     Show-Section "Server settings"
-    $vmPort = Read-Input "Port to listen on" "7171"
+    $vmPort = Read-Input "Port for verticalmedia to listen on" "7171"
+
+    # qBit URL auto-filled from what we configured above
+    $qbitUrl = "http://localhost:$qbitPort"
 
     @"
-# qBittorrent
+# qBittorrent — localhost auth is disabled, any credentials work
 QBIT_URL=$qbitUrl
 QBIT_USERNAME=$qbitUser
-QBIT_PASSWORD=$qbitPass
+QBIT_PASSWORD=
 
 # Prowlarr (leave KEY empty to disable)
 PROWLARR_URL=$prowlarrUrl
 PROWLARR_KEY=$prowlarrKey
 
-# Download paths
+# Download paths (must match qBittorrent categories configured above)
 PATH_ANIME=$pathAnime
 PATH_MOVIES=$pathMovies
 PATH_SHOWS=$pathShows
@@ -312,13 +560,32 @@ VM_PORT=$vmPort
     Write-Info "Keeping existing configuration."
     $vmPort = "7171"
     $portLine = Get-Content $envFile -ErrorAction SilentlyContinue |
-                Where-Object { $_ -match "^VM_PORT=" } |
-                Select-Object -First 1
+                Where-Object { $_ -match "^VM_PORT=" } | Select-Object -First 1
     if ($portLine) { $vmPort = $portLine -replace "^VM_PORT=\s*", "" }
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  Step 6 — Always write run.bat
+#  Step 6.5 — Windows Firewall rules
+# ─────────────────────────────────────────────────────────────────────────────
+Show-Section "Firewall"
+try {
+    # Remove stale rules from previous installs
+    Remove-NetFirewallRule -DisplayName "verticalmedia*"     -ErrorAction SilentlyContinue
+    Remove-NetFirewallRule -DisplayName "qBittorrent WebUI*" -ErrorAction SilentlyContinue
+    New-NetFirewallRule -DisplayName "verticalmedia ($vmPort)" `
+        -Direction Inbound -Protocol TCP -LocalPort ([int]$vmPort) `
+        -Action Allow -Profile Any | Out-Null
+    New-NetFirewallRule -DisplayName "qBittorrent WebUI ($qbitPort)" `
+        -Direction Inbound -Protocol TCP -LocalPort ([int]$qbitPort) `
+        -Action Allow -Profile Any | Out-Null
+    Write-Ok "Firewall rules added (port $vmPort for verticalmedia, port $qbitPort for qBittorrent)"
+} catch {
+    Write-Warn "Could not add firewall rules automatically: $_"
+    Write-Info "Add manually: New-NetFirewallRule -Direction Inbound -Protocol TCP -LocalPort $vmPort -Action Allow"
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  Step 7 — Always write run.bat
 # ─────────────────────────────────────────────────────────────────────────────
 
 $runBat = Join-Path $installDir "run.bat"
@@ -332,29 +599,36 @@ pause
 "@ | Set-Content $runBat -Encoding ASCII
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  Step 7 — Run on startup (optional)
+#  Step 8 — Run on startup (optional)
 # ─────────────────────────────────────────────────────────────────────────────
 
-Show-Section "Run on startup (optional)"
+Show-Section "Run verticalmedia on startup (optional)"
 Write-Info "Without a service, double-click run.bat to start verticalmedia."
 Write-Host ""
 
-$nssm     = Get-Command nssm -ErrorAction SilentlyContinue
+# Auto-install NSSM if not present — it gives proper NT service semantics
+# (starts at boot as a service, not just at user login)
+$nssm = Get-Command nssm -ErrorAction SilentlyContinue
+if (-not $nssm) {
+    Install-NSSM
+    $nssm = Get-Command nssm -ErrorAction SilentlyContinue
+}
+
 $schtasks = Get-Command schtasks -ErrorAction SilentlyContinue
 
 if ($nssm) {
-    if (Read-YN "Install as a Windows service via NSSM? (runs in background, auto-starts with Windows)" $true) {
+    if (Read-YN "Install as a Windows service via NSSM? (auto-starts with Windows)" $true) {
         $svcName = "verticalmedia"
-        $existing = nssm status $svcName 2>&1
-        if ($LASTEXITCODE -eq 0 -and $existing -notmatch "No such service") {
+        $status  = nssm status $svcName 2>&1
+        if ($LASTEXITCODE -eq 0 -and "$status" -notmatch "No such service") {
             Write-Info "Removing previous service..."
-            nssm stop $svcName 2>&1 | Out-Null
+            nssm stop   $svcName 2>&1 | Out-Null
             nssm remove $svcName confirm 2>&1 | Out-Null
         }
         nssm install $svcName $pyExe "-m" "uvicorn" "main:app" "--host" "0.0.0.0" "--port" $vmPort
         nssm set $svcName AppDirectory $installDir
-        nssm set $svcName AppEnvironmentExtra "@$envFile"
-        nssm set $svcName Start SERVICE_AUTO_START
+        nssm set $svcName Start        SERVICE_AUTO_START
+        # config.py calls load_dotenv() which reads .env from AppDirectory automatically
         nssm start $svcName
         Write-Ok "Service installed and started (auto-starts with Windows)"
         Write-Info "Manage: nssm start|stop|restart verticalmedia"
@@ -363,35 +637,49 @@ if ($nssm) {
     }
 } elseif ($schtasks) {
     if (Read-YN "Register as a login startup task via Task Scheduler?" $true) {
+        # Task runs as the current user at logon; config.py load_dotenv() reads .env
+        # from WorkingDirectory so no environment variables need to be baked in here.
+        $currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
         $taskXml = @"
 <?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <Principals>
+    <Principal id="Author">
+      <UserId>$currentUser</UserId>
+      <LogonType>InteractiveToken</LogonType>
+      <RunLevel>LeastPrivilege</RunLevel>
+    </Principal>
+  </Principals>
   <Triggers><LogonTrigger><Enabled>true</Enabled></LogonTrigger></Triggers>
   <Settings>
     <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
     <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
     <Hidden>true</Hidden>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
   </Settings>
-  <Actions><Exec>
-    <Command>$pyExe</Command>
-    <Arguments>-m uvicorn main:app --host 0.0.0.0 --port $vmPort</Arguments>
-    <WorkingDirectory>$installDir</WorkingDirectory>
-  </Exec></Actions>
+  <Actions>
+    <Exec>
+      <Command>$pyExe</Command>
+      <Arguments>-m uvicorn main:app --host 0.0.0.0 --port $vmPort</Arguments>
+      <WorkingDirectory>$installDir</WorkingDirectory>
+    </Exec>
+  </Actions>
 </Task>
 "@
         $xmlPath = Join-Path $env:TEMP "verticalmedia-task.xml"
-        [System.IO.File]::WriteAllText($xmlPath, $taskXml, [System.Text.Encoding]::Unicode)
+        [System.IO.File]::WriteAllText($xmlPath, $taskXml, [Text.Encoding]::Unicode)
         schtasks /Create /TN "verticalmedia" /XML $xmlPath /F | Out-Null
         Remove-Item $xmlPath -Force
-        Write-Ok "Startup task registered — verticalmedia launches at login"
+        Write-Ok "Startup task registered — launches at login"
         Write-Info "Manage: Task Scheduler > verticalmedia"
     } else {
         Write-Ok "Skipped — use run.bat to start manually."
     }
 } else {
-    Write-Warn "Service setup skipped (NSSM not found)."
-    Write-Info "To auto-start on boot: install NSSM from https://nssm.cc and re-run this script."
-    Write-Ok "run.bat written — double-click it to start verticalmedia"
+    Write-Warn "NSSM not found — skipping service setup."
+    Write-Info "For auto-start: install NSSM from https://nssm.cc and re-run."
+    Write-Ok "run.bat written — double-click to start"
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -400,14 +688,15 @@ if ($nssm) {
 
 Write-Host ""
 Write-Host "  ──────────────────────────────────────────────" -ForegroundColor Cyan
-Write-Host "   verticalmedia is ready!" -ForegroundColor Green
+Write-Host "   All done!" -ForegroundColor Green
 Write-Host ""
-Write-Host "   Open  > " -NoNewline -ForegroundColor DarkGray
+Write-Host "   verticalmedia > " -NoNewline -ForegroundColor DarkGray
 Write-Host "http://localhost:$vmPort" -ForegroundColor Cyan
-Write-Host "   API   > " -NoNewline -ForegroundColor DarkGray
-Write-Host "http://localhost:$vmPort/docs" -ForegroundColor DarkGray
+Write-Host "   qBittorrent   > " -NoNewline -ForegroundColor DarkGray
+Write-Host "http://localhost:$qbitPort" -ForegroundColor DarkGray
 Write-Host ""
 Write-Host "   Config : $envFile" -ForegroundColor DarkGray
 Write-Host "   Run    : $runBat" -ForegroundColor DarkGray
 Write-Host "  ──────────────────────────────────────────────" -ForegroundColor Cyan
 Write-Host ""
+Read-Host "  Press Enter to close"
