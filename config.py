@@ -22,7 +22,8 @@ PROWLARR_URL = os.getenv("PROWLARR_URL", "http://localhost:9696")
 PROWLARR_KEY = os.getenv("PROWLARR_KEY", "")
 
 # ━━━ TMDB (optional, for movie posters) ━━━
-TMDB_KEY = os.getenv("TMDB_KEY", "8265bd1679663a7ea12ac168da84d2e8")
+TMDB_KEY = os.getenv("TMDB_KEY", "")
+# Get your free key at: https://www.themoviedb.org/settings/api
 
 # ━━━ Media save paths ━━━
 SAVE_PATHS = {

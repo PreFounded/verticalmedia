@@ -33,38 +33,31 @@ Send directly to qBittorrent. No fuss.
 
 ## Quick Start
 
-### Option 1 — Linux (one command)
+### One-line install (Linux/macOS)
 ```bash
 curl -sSL https://raw.githubusercontent.com/PreFounded/verticalmedia/main/install.sh | bash
 ```
+Zero configuration. Opens at http://localhost:7171.
+Set your qBittorrent URL in Settings after install.
 
-### Option 2 — Windows (PowerShell)
+### Advanced install (custom paths/ports)
+```bash
+curl -sSL https://raw.githubusercontent.com/PreFounded/verticalmedia/main/install.sh | bash -s -- --advanced
+```
+
+### Windows
 ```powershell
 irm https://raw.githubusercontent.com/PreFounded/verticalmedia/main/install.ps1 | iex
 ```
 
-Installs Python and Git automatically if missing (via winget or direct download).  
-Optionally registers as a Windows service (NSSM) or startup task — or writes `run.bat` if you prefer manual start.
-
-### Option 3 — Docker
+### Docker
 ```bash
-docker run -d \
-  -p 7171:7171 \
-  -e QBIT_URL=http://your-server:8081 \
-  -e QBIT_USERNAME=admin \
-  -e QBIT_PASSWORD=adminadmin \
+docker run -d -p 7171:7171 \
+  -e QBIT_URL=http://your-qbittorrent:8081 \
   ghcr.io/prefounded/verticalmedia:latest
 ```
 
-### Option 4 — Docker Compose
-```bash
-git clone https://github.com/PreFounded/verticalmedia
-cd verticalmedia
-# Edit docker-compose.yml with your qBittorrent details
-docker compose up -d
-```
-
-### Option 5 — Manual
+### Manual
 ```bash
 git clone https://github.com/PreFounded/verticalmedia
 cd verticalmedia
