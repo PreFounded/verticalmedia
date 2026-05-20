@@ -90,6 +90,22 @@ expand_path() {
     esac
 }
 
+# Run a command silently in background with a spinner; show output only on failure
+run_spin() {
+    local label="$1"; shift
+    local log; log=$(mktemp)
+    "$@" >"$log" 2>&1 &
+    local pid=$! sp='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏' i=0
+    while kill -0 "$pid" 2>/dev/null; do
+        printf "\r     ${CY}%s${NC}  %s  " "${sp:$((i++ % ${#sp})):1}" "$label" >/dev/tty
+        sleep 0.1
+    done
+    printf "\r                                                        \r" >/dev/tty
+    local rc=0; wait "$pid" || rc=$?
+    [[ $rc -ne 0 ]] && { cat "$log" >&2; rm -f "$log"; return $rc; }
+    rm -f "$log"
+}
+
 # ─────────────────────────────────────────────────────────────────────────────
 #  Package manager detection
 # ─────────────────────────────────────────────────────────────────────────────
@@ -130,22 +146,28 @@ install_python() {
     section "Installing Python"
     case "$PM" in
         apt)
+            sudo -v
             info "Trying python3.12 from default repos..."
             if apt-cache show python3.12 &>/dev/null 2>&1; then
-                sudo apt-get update -qq
-                pm_install python3.12 python3.12-venv python3.12-distutils 2>/dev/null || \
-                pm_install python3.12 python3.12-venv
+                run_spin "Updating package list (~15s)..." sudo apt-get update -qq
+                run_spin "Installing Python 3.12 (1-3 min)..." \
+                    sudo apt-get install -y python3.12 python3.12-venv python3.12-distutils || \
+                run_spin "Installing Python 3.12 (1-3 min)..." \
+                    sudo apt-get install -y python3.12 python3.12-venv
             else
                 info "Adding deadsnakes PPA for Python 3.12..."
-                pm_install software-properties-common
-                sudo add-apt-repository -y ppa:deadsnakes/ppa
-                sudo apt-get update -qq
-                pm_install python3.12 python3.12-venv
+                run_spin "Installing prerequisites (~30s)..." \
+                    sudo apt-get install -y software-properties-common
+                run_spin "Adding deadsnakes PPA..." \
+                    sudo add-apt-repository -y ppa:deadsnakes/ppa
+                run_spin "Updating package list (~15s)..." sudo apt-get update -qq
+                run_spin "Installing Python 3.12 (1-3 min)..." \
+                    sudo apt-get install -y python3.12 python3.12-venv
             fi
             ;;
-        pacman) pm_install python python-pip ;;
-        dnf)    pm_install python3.12 python3-pip 2>/dev/null || pm_install python3 python3-pip ;;
-        brew)   brew install python@3.12 ;;
+        pacman) info "Installing Python (~1-2 min)..."; pm_install python python-pip ;;
+        dnf)    info "Installing Python (~1-2 min)..."; pm_install python3.12 python3-pip 2>/dev/null || pm_install python3 python3-pip ;;
+        brew)   info "Installing Python (~1-3 min)..."; brew install python@3.12 ;;
         *)      die "No package manager found. Install Python 3.10+ from https://python.org and re-run." ;;
     esac
 }
@@ -153,17 +175,24 @@ install_python() {
 install_git() {
     section "Installing Git"
     case "$PM" in
-        apt)    sudo apt-get update -qq; pm_install git ;;
-        pacman) pm_install git ;;
-        dnf)    pm_install git ;;
-        brew)   brew install git ;;
+        apt)
+            sudo -v
+            run_spin "Updating package list (~15s)..." sudo apt-get update -qq
+            run_spin "Installing git (~30s)..." sudo apt-get install -y git
+            ;;
+        pacman) info "Installing git (~30s)..."; pm_install git ;;
+        dnf)    info "Installing git (~30s)..."; pm_install git ;;
+        brew)   info "Installing git (~1 min)..."; brew install git ;;
         *)      die "No package manager found. Install Git from https://git-scm.com and re-run." ;;
     esac
 }
 
 install_curl() {
     case "$PM" in
-        apt)    sudo apt-get update -qq; pm_install curl ;;
+        apt)
+            run_spin "Updating package list (~15s)..." sudo apt-get update -qq
+            run_spin "Installing curl (~15s)..." sudo apt-get install -y curl
+            ;;
         pacman) pm_install curl ;;
         dnf)    pm_install curl ;;
         brew)   brew install curl ;;
@@ -187,11 +216,12 @@ install_qbittorrent() {
     info "Installing qbittorrent-nox (headless torrent daemon)..."
     case "$PM" in
         apt)
-            sudo apt-get update -qq
+            sudo -v
+            run_spin "Updating package list (~15s)..." sudo apt-get update -qq
             if apt-cache show qbittorrent-nox &>/dev/null 2>&1; then
-                pm_install qbittorrent-nox
+                run_spin "Installing qbittorrent-nox (~1 min)..." sudo apt-get install -y qbittorrent-nox
             else
-                pm_install qbittorrent
+                run_spin "Installing qbittorrent (~1 min)..." sudo apt-get install -y qbittorrent
             fi
             ;;
         pacman) pm_install qbittorrent-nox 2>/dev/null || pm_install qbittorrent ;;
@@ -311,15 +341,18 @@ PLISTEOF
 
 wait_for_webui() {
     local port="$1"
-    info "Waiting for qBittorrent Web UI on port $port..."
+    printf "     ${DM}Waiting for Web UI${NC}" >/dev/tty
     local i
     for i in $(seq 1 30); do
         if curl -sf "http://localhost:$port/api/v2/app/version" &>/dev/null 2>&1; then
+            printf "\n" >/dev/tty
             ok "qBittorrent Web UI ready: http://localhost:$port"
             return 0
         fi
+        printf "${DM}.${NC}" >/dev/tty
         sleep 1
     done
+    printf "\n" >/dev/tty
     warn "qBittorrent Web UI did not respond in 30s — download categories need manual setup."
     return 1
 }
@@ -435,7 +468,7 @@ if [[ -d "$INSTALL_DIR/.git" ]]; then
     info "Pulling latest changes..."
     git -C "$INSTALL_DIR" pull --ff-only
 else
-    info "Cloning repository..."
+    info "Cloning repository (~20s, depends on connection)..."
     git clone "$REPO" "$INSTALL_DIR"
 fi
 ok "Files ready"
@@ -458,9 +491,8 @@ if [[ ! -d "$VENV" ]]; then
     }
 fi
 
-info "Installing dependencies..."
-"$VENV_PYTHON" -m pip install -q --upgrade pip
-"$VENV_PYTHON" -m pip install -q -r "$INSTALL_DIR/requirements.txt"
+run_spin "Upgrading pip..." "$VENV_PYTHON" -m pip install -q --upgrade pip
+run_spin "Installing packages (~30-90s)..." "$VENV_PYTHON" -m pip install -q -r "$INSTALL_DIR/requirements.txt"
 ok "Dependencies installed"
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -495,12 +527,21 @@ if $DO_CONFIG; then
     fi
 
     section "Download paths"
-    info "Full paths where torrents will be saved."
-    info "These must match the category save paths in qBittorrent."
+    info "Choose a media folder — Anime, Movies and Shows subfolders are created inside it."
     echo
-    PATH_ANIME=$(ask  "Anime save path"    "/downloads/anime")
-    PATH_MOVIES=$(ask "Movies save path"   "/downloads/movies")
-    PATH_SHOWS=$(ask  "TV shows save path" "/downloads/shows")
+    DEFAULT_MEDIA="$HOME/VerticalMedia"
+    MEDIA_DIR_RAW=$(ask "Media folder" "$DEFAULT_MEDIA")
+    MEDIA_DIR=$(expand_path "$MEDIA_DIR_RAW")
+    [[ -z "$MEDIA_DIR" ]] && MEDIA_DIR="$DEFAULT_MEDIA"
+
+    PATH_ANIME="$MEDIA_DIR/Anime"
+    PATH_MOVIES="$MEDIA_DIR/Movies"
+    PATH_SHOWS="$MEDIA_DIR/Shows"
+
+    for _p in "$PATH_ANIME" "$PATH_MOVIES" "$PATH_SHOWS"; do
+        mkdir -p "$_p"
+    done
+    ok "$MEDIA_DIR/{Anime, Movies, Shows}"
 
     section "Server settings"
     VM_PORT=$(ask "Port to listen on" "7171")

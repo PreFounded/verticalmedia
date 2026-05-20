@@ -115,8 +115,7 @@ function Refresh-Path {
 function Download-File([string]$url, [string]$dest) {
     Write-Info "Downloading $(Split-Path $url -Leaf)..."
     [Net.ServicePointManager]::SecurityProtocol = "Tls12"
-    $wc = New-Object System.Net.WebClient
-    $wc.DownloadFile($url, $dest)
+    Invoke-WebRequest -Uri $url -OutFile $dest -UseBasicParsing
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -127,14 +126,14 @@ function Install-Python {
     Show-Section "Installing Python $PY_VERSION"
     $winget = Get-Command winget -ErrorAction SilentlyContinue
     if ($winget) {
-        Write-Info "Using winget..."
+        Write-Info "Using winget (1-3 min)..."
         winget install --id Python.Python.3.12 --source winget `
             --accept-package-agreements --accept-source-agreements -e --silent
         Refresh-Path
     } else {
         $installer = Join-Path $env:TEMP "python-installer.exe"
         Download-File $PY_URL $installer
-        Write-Info "Running installer silently..."
+        Write-Info "Running Python installer silently (1-2 min)..."
         Start-Process $installer "/quiet InstallAllUsers=1 PrependPath=1 Include_launcher=0 Include_test=0" -Wait
         Remove-Item $installer -Force
         Refresh-Path
@@ -152,7 +151,7 @@ function Install-Git {
     Show-Section "Installing Git"
     $winget = Get-Command winget -ErrorAction SilentlyContinue
     if ($winget) {
-        Write-Info "Using winget..."
+        Write-Info "Using winget (1-2 min)..."
         winget install --id Git.Git --source winget `
             --accept-package-agreements --accept-source-agreements -e --silent
         Refresh-Path
@@ -163,7 +162,7 @@ function Install-Git {
         if (-not $asset) { Stop-Install "Could not find Git installer. Get it from https://git-scm.com/download/win" }
         $installer = Join-Path $env:TEMP "git-installer.exe"
         Download-File $asset.browser_download_url $installer
-        Write-Info "Running installer silently..."
+        Write-Info "Running Git installer silently (~1 min)..."
         Start-Process $installer "/VERYSILENT /NORESTART /NOCANCEL /SP-" -Wait
         Remove-Item $installer -Force
         Refresh-Path
@@ -202,7 +201,7 @@ function Install-QBittorrent {
     Show-Section "Installing qBittorrent"
     $winget = Get-Command winget -ErrorAction SilentlyContinue
     if ($winget) {
-        Write-Info "Using winget..."
+        Write-Info "Using winget (1-2 min)..."
         winget install --id qBittorrent.qBittorrent --source winget `
             --accept-package-agreements --accept-source-agreements -e --silent
         Refresh-Path
@@ -217,7 +216,7 @@ function Install-QBittorrent {
         if (-not $asset) { Stop-Install "Could not find qBittorrent installer. Download from https://qbittorrent.org" }
         $installer = Join-Path $env:TEMP "qbittorrent-setup.exe"
         Download-File $asset.browser_download_url $installer
-        Write-Info "Running installer silently..."
+        Write-Info "Running qBittorrent installer silently (~1 min)..."
         Start-Process $installer "/S" -Wait   # NSIS silent flag
         Remove-Item $installer -Force
         Refresh-Path
@@ -346,13 +345,16 @@ function Configure-QBittorrent([string]$qbitExe, [string]$port, [string]$usernam
     # Wait for the Web UI to be ready (up to 20 seconds)
     $baseUrl = "http://localhost:$port"
     $ready   = $false
+    Write-Host "     Waiting for Web UI " -NoNewline -ForegroundColor DarkGray
     for ($i = 0; $i -lt 20; $i++) {
         try {
             $r = Invoke-WebRequest "$baseUrl/api/v2/app/version" -UseBasicParsing -TimeoutSec 1 -ErrorAction Stop
             if ($r.StatusCode -eq 200) { $ready = $true; break }
         } catch { }
+        Write-Host "." -NoNewline -ForegroundColor DarkGray
         Start-Sleep -Seconds 1
     }
+    Write-Host ""
 
     if (-not $ready) {
         Write-Warn "qBittorrent Web UI did not respond in time — categories will need to be set manually."
@@ -492,7 +494,7 @@ if (Test-Path (Join-Path $installDir ".git")) {
     git -C $installDir pull --ff-only
     if ($LASTEXITCODE -ne 0) { Stop-Install "git pull failed. Check your network and try again." }
 } else {
-    Write-Info "Cloning repository..."
+    Write-Info "Cloning repository (~20s, depends on connection)..."
     git clone $REPO $installDir
     if ($LASTEXITCODE -ne 0) { Stop-Install "git clone failed. Check your network and try again." }
 }
@@ -514,8 +516,6 @@ if (-not (Test-Path $venv)) {
     if ($LASTEXITCODE -ne 0) { Stop-Install "Failed to create virtual environment." }
 }
 
-Write-Info "Installing dependencies (this takes a moment)..."
-
 # pip.exe is sometimes missing from new venvs on fresh Python installs — bootstrap it
 if (-not (Test-Path $pipExe)) {
     Write-Info "pip not found in venv — bootstrapping..."
@@ -525,8 +525,10 @@ if (-not (Test-Path $pipExe)) {
     }
 }
 
+Write-Info "Upgrading pip..."
 & $pipExe install -q --upgrade pip
-& $pipExe install -q -r (Join-Path $installDir "requirements.txt")
+Write-Info "Installing packages (~30-90 sec)..."
+& $pipExe install -r (Join-Path $installDir "requirements.txt")
 if ($LASTEXITCODE -ne 0) { Stop-Install "pip install failed. See error above." }
 Write-Ok "Dependencies installed"
 
