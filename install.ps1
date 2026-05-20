@@ -423,20 +423,19 @@ $qbitPort = Read-Input "qBittorrent Web UI port" "8081"
 $qbitUser = Read-Input "qBittorrent username"    "admin"
 
 Show-Section "Download paths"
-Write-Info "Where should torrents be saved? These become qBittorrent categories."
-Write-Info "Use full Windows paths — e.g. D:\Media\Anime"
+Write-Info "Choose a media folder — Anime, Movies and Shows subfolders are created inside it."
 Write-Host ""
-$pathAnime  = Read-Input "Anime save path"    "C:\Downloads\Anime"
-$pathMovies = Read-Input "Movies save path"   "C:\Downloads\Movies"
-$pathShows  = Read-Input "TV shows save path" "C:\Downloads\Shows"
+$defaultMedia = Join-Path ([Environment]::GetFolderPath('MyDocuments')) "VerticalMedia"
+$mediaDir     = Read-Input "Media folder" $defaultMedia
 
-# Create save path directories if they don't exist
+$pathAnime  = Join-Path $mediaDir "Anime"
+$pathMovies = Join-Path $mediaDir "Movies"
+$pathShows  = Join-Path $mediaDir "Shows"
+
 foreach ($p in @($pathAnime, $pathMovies, $pathShows)) {
-    if (-not (Test-Path $p)) {
-        New-Item -ItemType Directory -Path $p -Force | Out-Null
-        Write-Info "Created: $p"
-    }
+    New-Item -ItemType Directory -Path $p -Force | Out-Null
 }
+Write-Ok "$mediaDir\{Anime, Movies, Shows}"
 
 # Configure Web UI + categories unattended
 Configure-QBittorrent $qbitExe $qbitPort $qbitUser @{
@@ -570,7 +569,7 @@ QBIT_PASSWORD=
 PROWLARR_URL=$prowlarrUrl
 PROWLARR_KEY=$prowlarrKey
 
-# Download paths (must match qBittorrent categories configured above)
+# Download paths
 PATH_ANIME=$pathAnime
 PATH_MOVIES=$pathMovies
 PATH_SHOWS=$pathShows
