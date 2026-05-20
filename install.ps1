@@ -239,7 +239,7 @@ function Update-IniSection([string]$iniPath, [string]$section, [hashtable]$keys)
             $line = $line.TrimEnd()
             if ($line -match '^\[(.+)\]$') {
                 $curSec = $Matches[1]
-                if (-not $ini.ContainsKey($curSec)) {
+                if (-not $ini.Contains($curSec)) {
                     $ini[$curSec] = [ordered]@{}
                     $secList.Add($curSec)
                 }
@@ -250,7 +250,7 @@ function Update-IniSection([string]$iniPath, [string]$section, [hashtable]$keys)
     }
 
     # Apply updates
-    if (-not $ini.ContainsKey($section)) {
+    if (-not $ini.Contains($section)) {
         $ini[$section] = [ordered]@{}
         $secList.Add($section)
     }
